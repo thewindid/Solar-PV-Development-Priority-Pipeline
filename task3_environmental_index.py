@@ -1,12 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-
-"""
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §0  IMPORTS
-# ═══════════════════════════════════════════════════════════════════════════════
 import os, sys, json, math, logging, warnings
 from pathlib   import Path
 from datetime  import datetime
