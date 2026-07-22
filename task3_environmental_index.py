@@ -27,7 +27,6 @@ from   matplotlib.colors     import LinearSegmentedColormap, BoundaryNorm
 from   matplotlib.gridspec   import GridSpec
 import seaborn               as sns
 
-# Optional
 _opt = {}
 for _pkg, _key in [('contextily','ctx'),('folium','folium')]:
     try: _opt[_key] = __import__(_pkg)
@@ -51,12 +50,8 @@ matplotlib.rcParams.update({
     'grid.alpha'        : 0.3,
 })
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §1  KONFIGURASI
-# ═══════════════════════════════════════════════════════════════════════════════
 CFG = dict(
-    # ── Jalur input ───────────────────────────────────────────────────────────
+   
     bldg_path    = 'data/Building_Footprint.geojson',
     aod_path     = 'data/satellite/aod_samples.csv',
     lst_path     = 'data/satellite/lst_samples.csv',
@@ -65,28 +60,18 @@ CFG = dict(
     lc_path      = 'data/satellite/landcover_samples.csv',
     out_dir      = 'output/task3/',
 
-    # ── CRS ───────────────────────────────────────────────────────────────────
     geo_crs      = 'EPSG:4326',
-    proj_crs     = 'EPSG:32648',  # ← Ganti sesuai zona UTM area studi
+    proj_crs     = 'EPSG:32648', 
 
-    # ── Bobot WLC indikator (default, diuji sensitivitas di §9) ──────────────
-    # Logika arah:
-    #   AOD ↑ = polusi ↑ = degradasi ↑  → gunakan langsung
-    #   LST ↑ = panas ↑  = degradasi ↑  → gunakan langsung
-    #   NDVI↑ = vegetasi = degradasi ↓  → DIINVERSI (1 - NDVI_norm)
-    #   NDBI ↑ = built-up= degradasi ↑  → gunakan langsung
-    #   CF ↑  = awan ↑   = degradasi ↕  → bobot kecil
-    #   LC    = kelas     = skor tetap  → map ke degradasi score
     weights = {
-        'AOD'  : 0.30,   # kualitas udara — paling signifikan
-        'LST'  : 0.25,   # tekanan termal / UHI
-        'NDVI' : 0.20,   # kehilangan vegetasi (diinversi)
-        'NDBI' : 0.15,   # intensitas lahan terbangun
-        'CF'   : 0.05,   # tutupan awan (sekunder)
-        'LC'   : 0.05,   # land cover (sekunder)
+        'AOD'  : 0.30,  
+        'LST'  : 0.25,  
+        'NDVI' : 0.20,  
+        'NDBI' : 0.15,  
+        'CF'   : 0.05,  
+        'LC'   : 0.05,  
     },
 
-    # ── Skenario sensitivitas bobot ───────────────────────────────────────────
     scenarios = {
         'Baseline'      : {'AOD':0.30,'LST':0.25,'NDVI':0.20,'NDBI':0.15,'CF':0.05,'LC':0.05},
         'Air_Quality'   : {'AOD':0.45,'LST':0.20,'NDVI':0.15,'NDBI':0.10,'CF':0.05,'LC':0.05},
@@ -95,33 +80,26 @@ CFG = dict(
         'Equal_Weight'  : {'AOD':0.20,'LST':0.20,'NDVI':0.20,'NDBI':0.20,'CF':0.10,'LC':0.10},
     },
 
-    # ── Klasifikasi EDI ───────────────────────────────────────────────────────
     thr_low      = 0.33,
     thr_high     = 0.67,
 
-    # ── IDW interpolasi ───────────────────────────────────────────────────────
-    idw_k        = 5,     # k tetangga terdekat
-    idw_power    = 2,     # eksponen jarak (w = 1/d^p)
+    idw_k        = 5,    
+    idw_power    = 2,    
 
-    # ── ML ───────────────────────────────────────────────────────────────────
-    gbr_n        = 200,   # GBR n_estimators
+    gbr_n        = 200,  
     gbr_lr       = 0.05,
     gbr_depth    = 4,
     gbr_seed     = 42,
-    km_max       = 6,     # K-Means: coba k=2..km_max
-    cv_k         = 5,     # K-Fold CV
-    pca_n        = 4,     # komponen PCA yang disimpan
-    min_valid    = 30,    # min data valid untuk ML
+    km_max       = 6,    
+    cv_k         = 5,    
+    pca_n        = 4,    
+    min_valid    = 30,   
 )
 
 OUT = CFG['out_dir']
 for _s in ['','maps/','figures/','data/']:
     Path(OUT + _s).mkdir(parents=True, exist_ok=True)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §2  LOGGING
-# ═══════════════════════════════════════════════════════════════════════════════
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s │ %(levelname)-7s │ %(message)s',
@@ -133,9 +111,6 @@ logging.basicConfig(
 )
 log = logging.getLogger('Task3')
 
-
-# ── Colormaps ─────────────────────────────────────────────────────────────────
-# EDI: hijau (baik) → merah (terdegradasi)
 EDI_CMAP = LinearSegmentedColormap.from_list(
     'edi', ['#1a9850', '#d9ef8b', '#fee08b', '#fc8d59', '#d73027'], N=256
 )
@@ -147,7 +122,7 @@ NDBI_CMAP = LinearSegmentedColormap.from_list('ndbi',['#f7f7f7','#8c510a'], N=25
 CLASS_COLORS = {'Rendah':'#1a9850','Sedang':'#fee08b','Tinggi':'#d73027'}
 CLASS_ORDER  = ['Rendah','Sedang','Tinggi']
 
-IND_META = {   # arah: +1=gunakan raw (tinggi=buruk), -1=inversi (tinggi=baik)
+IND_META = {  
     'AOD' : {'label':'AOD (Polusi Udara)',       'arah':+1, 'unit':'–',  'cmap':AOD_CMAP },
     'LST' : {'label':'LST (Suhu Permukaan)',     'arah':+1, 'unit':'°C', 'cmap':LST_CMAP },
     'NDVI': {'label':'NDVI (Vegetasi, inv.)',    'arah':-1, 'unit':'–',  'cmap':NDVI_CMAP},
@@ -155,11 +130,6 @@ IND_META = {   # arah: +1=gunakan raw (tinggi=buruk), -1=inversi (tinggi=baik)
     'CF'  : {'label':'CF (Tutupan Awan)',        'arah':+1, 'unit':'–',  'cmap':'Blues'  },
     'LC'  : {'label':'LC (Land Cover deg.)',     'arah':+1, 'unit':'–',  'cmap':'Reds'   },
 }
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §3  LOAD DATA
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def load_buildings(path: str) -> gpd.GeoDataFrame:
     log.info(f'[LOAD] Building Footprint ← {path}')
@@ -175,7 +145,6 @@ def load_buildings(path: str) -> gpd.GeoDataFrame:
         gdf['area_m2'] = gdf.geometry.area
     log.info(f'       {len(gdf):,} bangunan valid | CRS: {gdf.crs}')
     return gdf
-
 
 def _load_csv_indicator(path: str, col_map: dict,
                          fallback_value: float = None,
@@ -196,7 +165,7 @@ def _load_csv_indicator(path: str, col_map: dict,
                 if fallback_value is not None:
                     df[col_out] = fallback_value
                 else:
-                    # Synthetic: gradient + noise untuk testing
+                   
                     cx_n = (cx - cx.min()) / (cx.max() - cx.min() + 1e-10)
                     cy_n = (cy - cy.min()) / (cy.max() - cy.min() + 1e-10)
                     df[col_out] = (0.3 + 0.4*cx_n + 0.2*cy_n
@@ -207,17 +176,16 @@ def _load_csv_indicator(path: str, col_map: dict,
 
     df = pd.read_csv(path)
     df.columns = df.columns.str.strip()
-    # Normalisasi nama kolom lat/lon
+   
     for c in df.columns:
         cl = c.lower()
         if cl in ('lat','latitude','y'):   df = df.rename(columns={c:'lat'})
         if cl in ('lon','longitude','x'):  df = df.rename(columns={c:'lon'})
-    # Rename kolom indikator
+   
     for c_in, c_out in col_map.items():
         if c_in in df.columns and c_in != c_out:
             df = df.rename(columns={c_in: c_out})
     return df.dropna(subset=['lat','lon'])
-
 
 def load_all_satellite(buildings: gpd.GeoDataFrame) -> dict:
     """
@@ -269,11 +237,6 @@ def load_all_satellite(buildings: gpd.GeoDataFrame) -> dict:
         log.info(f'  {k:<6}: {len(df):>5,} titik | kolom: {available}')
     return sat
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §4  IDW INTERPOLASI KE BANGUNAN
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def idw_interpolate(bldg_pts: np.ndarray,
                      src_pts : np.ndarray,
                      src_vals: np.ndarray,
@@ -303,12 +266,11 @@ def idw_interpolate(bldg_pts: np.ndarray,
     if k_use == 1:
         return src_vals[idx.ravel()]
 
-    dist  = np.where(dist < 1e-10, 1e-10, dist)  # evitar divisão por zero
+    dist  = np.where(dist < 1e-10, 1e-10, dist) 
     w     = 1.0 / dist**power
     w_sum = w.sum(axis=1, keepdims=True)
     vals  = src_vals[idx]
     return (w * vals).sum(axis=1) / w_sum.ravel()
-
 
 def assign_indicators_to_buildings(buildings: gpd.GeoDataFrame,
                                     sat: dict) -> gpd.GeoDataFrame:
@@ -322,7 +284,6 @@ def assign_indicators_to_buildings(buildings: gpd.GeoDataFrame,
     bldg_cy   = bldg_geo.geometry.centroid.y.values
     bldg_pts  = np.column_stack([bldg_cx, bldg_cy])
 
-    # ── AOD ─────────────────────────────────────────────────────────────────
     if 'AOD' in sat and 'AOD' in sat['AOD'].columns:
         src = sat['AOD'][['lon','lat','AOD']].dropna()
         buildings['AOD'] = idw_interpolate(
@@ -332,7 +293,6 @@ def assign_indicators_to_buildings(buildings: gpd.GeoDataFrame,
         log.info(f'  AOD  → {buildings["AOD"].notna().sum():,} bangunan valid | '
                  f'mean={buildings["AOD"].mean():.4f}')
 
-    # ── LST ─────────────────────────────────────────────────────────────────
     if 'LST' in sat and 'LST' in sat['LST'].columns:
         src = sat['LST'][['lon','lat','LST']].dropna()
         buildings['LST'] = idw_interpolate(
@@ -341,7 +301,6 @@ def assign_indicators_to_buildings(buildings: gpd.GeoDataFrame,
         )
         log.info(f'  LST  → mean={buildings["LST"].mean():.1f}°C')
 
-    # ── NDVI + NDBI ──────────────────────────────────────────────────────────
     ndvi_df = sat.get('NDVI', pd.DataFrame())
     for col_name in ['NDVI','NDBI']:
         if col_name in ndvi_df.columns:
@@ -352,7 +311,6 @@ def assign_indicators_to_buildings(buildings: gpd.GeoDataFrame,
             )
             log.info(f'  {col_name:<5}→ mean={buildings[col_name].mean():.4f}')
 
-    # ── CF ───────────────────────────────────────────────────────────────────
     if 'CF' in sat and 'CF' in sat['CF'].columns:
         src = sat['CF'][['lon','lat','CF']].dropna()
         buildings['CF'] = idw_interpolate(
@@ -361,7 +319,6 @@ def assign_indicators_to_buildings(buildings: gpd.GeoDataFrame,
         ).clip(0, 1)
         log.info(f'  CF   → mean={buildings["CF"].mean():.4f}')
 
-    # ── LC ───────────────────────────────────────────────────────────────────
     if 'LC' in sat and 'LC' in sat['LC'].columns:
         src = sat['LC'][['lon','lat','LC']].dropna()
         buildings['LC'] = idw_interpolate(
@@ -370,7 +327,6 @@ def assign_indicators_to_buildings(buildings: gpd.GeoDataFrame,
         ).clip(0, 1)
         log.info(f'  LC   → mean={buildings["LC"].mean():.4f}')
 
-    # Isi NaN sisa dengan median kolom
     for col in ['AOD','LST','NDVI','NDBI','CF','LC']:
         if col in buildings.columns:
             med = buildings[col].median()
@@ -380,11 +336,6 @@ def assign_indicators_to_buildings(buildings: gpd.GeoDataFrame,
                 log.warning(f'  {col}: {n} NaN diisi median ({med:.4f})')
 
     return buildings
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §5  NORMALISASI INDIKATOR  (Task 3.2a)
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def normalize_indicators(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
@@ -405,7 +356,7 @@ def normalize_indicators(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         vals = buildings[[ind]].values.astype(float)
         norm = scaler.fit_transform(vals).ravel()
 
-        if meta['arah'] == -1:   # NDVI: inversi
+        if meta['arah'] == -1:  
             norm = 1.0 - norm
             log.info(f'  {ind:<6}: normalisasi + DIINVERSI '
                      f'(mean_raw={buildings[ind].mean():.3f} → '
@@ -418,11 +369,6 @@ def normalize_indicators(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         buildings[f'{ind}_norm'] = norm
 
     return buildings
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §6  ML KOMPONEN
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def run_pca_analysis(buildings: gpd.GeoDataFrame) -> dict:
     """
@@ -459,10 +405,9 @@ def run_pca_analysis(buildings: gpd.GeoDataFrame) -> dict:
         columns=[f'PC{i+1}' for i in range(n_comp)]
     )
 
-    # PC1 sebagai composite EDI alternatif (pastikan arah = degradasi positif)
     pc1 = scores[:, 0]
     if np.corrcoef(pc1, buildings['AOD_norm'].values)[0,1] < 0:
-        pc1 = -pc1  # flip PC1 agar korelasi dengan AOD positif
+        pc1 = -pc1 
     mm = MinMaxScaler()
     buildings['EDI_pca'] = mm.fit_transform(pc1.reshape(-1,1)).ravel()
 
@@ -481,7 +426,6 @@ def run_pca_analysis(buildings: gpd.GeoDataFrame) -> dict:
         'norm_cols'      : norm_cols,
         'n_components'   : n_comp,
     }
-
 
 def run_kmeans_clustering(buildings: gpd.GeoDataFrame,
                            pca_results: dict) -> dict:
@@ -508,7 +452,6 @@ def run_kmeans_clustering(buildings: gpd.GeoDataFrame,
         log.warning(f'  Terlalu sedikit data ({len(X)}) → KMeans dilewati')
         return {}
 
-    # Cari k optimal via silhouette
     best_k, best_sil, sil_scores = 2, -1, {}
     k_max = min(CFG['km_max'], len(X) - 1)
     for k in range(2, k_max + 1):
@@ -523,19 +466,16 @@ def run_kmeans_clustering(buildings: gpd.GeoDataFrame,
 
     log.info(f'  ✓ k optimal = {best_k} (silhouette = {best_sil:.4f})')
 
-    # Latih final dengan k optimal
     km_final = KMeans(n_clusters=best_k, random_state=CFG['gbr_seed'],
                        n_init=15, max_iter=500)
     labels   = km_final.fit_predict(X)
 
-    # Label ulang cluster berdasarkan rata-rata EDI WLC (nanti diisi di §7)
     buildings['km_cluster'] = labels
 
-    # Profil tiap cluster
     centers = pd.DataFrame(km_final.cluster_centers_,
                             columns=[c.replace('_norm','') for c in norm_cols])
     log.info('  Profil cluster center:')
-    # Hapus indent=4 dan tambahkan \n agar rapi saat dicetak
+   
     log.info('\n' + centers.round(3).to_string())
 
     return {
@@ -546,7 +486,6 @@ def run_kmeans_clustering(buildings: gpd.GeoDataFrame,
         'centers'     : centers,
         'norm_cols'   : norm_cols,
     }
-
 
 def smooth_edi_with_gbr(buildings: gpd.GeoDataFrame,
                           wlc_col: str = 'EDI_wlc') -> dict:
@@ -585,7 +524,6 @@ def smooth_edi_with_gbr(buildings: gpd.GeoDataFrame,
     cx = bldg_p.geometry.centroid.x.values
     cy = bldg_p.geometry.centroid.y.values
 
-    # Fitur gabungan: koordinat + indikator + atribut bangunan
     feat_parts = [cx.reshape(-1,1), cy.reshape(-1,1)]
     feat_names = ['x_m', 'y_m']
     for col in norm_cols:
@@ -612,7 +550,6 @@ def smooth_edi_with_gbr(buildings: gpd.GeoDataFrame,
         random_state   = CFG['gbr_seed'],
     )
 
-    # K-Fold CV
     kf   = KFold(n_splits=CFG['cv_k'], shuffle=True, random_state=CFG['gbr_seed'])
     y_cv = cross_val_predict(gbr, X, y, cv=kf)
     r2   = float(r2_score(y, y_cv))
@@ -620,20 +557,17 @@ def smooth_edi_with_gbr(buildings: gpd.GeoDataFrame,
     log.info(f'  GBR ({CFG["cv_k"]}-Fold CV) → R²={r2:.4f} | MAE={mae:.4f} '
              f'| n={len(y)}')
 
-    # Latih pada semua data
     gbr.fit(X, y)
     y_pred = gbr.predict(X).clip(0, 1)
 
     mm = MinMaxScaler()
     buildings['EDI_gbr'] = mm.fit_transform(y_pred.reshape(-1,1)).ravel()
 
-    # Feature importance
     fi     = dict(zip(feat_names, gbr.feature_importances_))
     fi_top = sorted(fi, key=fi.get, reverse=True)[:3]
     log.info('  Feature importance (top 3): ' +
              ', '.join([f'{k}={fi[k]:.3f}' for k in fi_top]))
 
-    # Bandingkan juga XGBoost jika tersedia
     xgb_metrics = {}
     if HAS_XGB:
         import xgboost as xgb
@@ -666,11 +600,6 @@ def smooth_edi_with_gbr(buildings: gpd.GeoDataFrame,
         ),
     }
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §7  KALKULASI EDI & KLASIFIKASI  (Task 3.2b)
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def calculate_wlc_edi(buildings: gpd.GeoDataFrame,
                        weights: dict = None,
                        col_prefix: str = 'EDI_wlc') -> gpd.GeoDataFrame:
@@ -687,7 +616,6 @@ def calculate_wlc_edi(buildings: gpd.GeoDataFrame,
     if weights is None:
         weights = CFG['weights']
 
-    # Pastikan bobot jumlah = 1.0
     w_total = sum(weights.values())
     weights = {k: v/w_total for k, v in weights.items()}
 
@@ -706,7 +634,6 @@ def calculate_wlc_edi(buildings: gpd.GeoDataFrame,
         buildings[col_prefix] = 0.5
         return buildings
 
-    # Normalisasi ulang jika ada indikator yang tidak tersedia
     edi = edi / w_used
 
     mm = MinMaxScaler()
@@ -715,7 +642,6 @@ def calculate_wlc_edi(buildings: gpd.GeoDataFrame,
              f'mean={buildings[col_prefix].mean():.4f} | '
              f'std={buildings[col_prefix].std():.4f}')
     return buildings
-
 
 def calculate_final_edi(buildings: gpd.GeoDataFrame,
                          use_gbr: bool = True) -> gpd.GeoDataFrame:
@@ -733,7 +659,6 @@ def calculate_final_edi(buildings: gpd.GeoDataFrame,
     if 'EDI_pca' in buildings.columns:
         cols_w['EDI_pca'] = 0.10
 
-    # Normalisasi bobot
     total = sum(cols_w.values())
     edi_f = np.zeros(len(buildings))
     for col, w in cols_w.items():
@@ -744,7 +669,6 @@ def calculate_final_edi(buildings: gpd.GeoDataFrame,
     log.info(f'  EDI final: mean={buildings["env_deg_index"].mean():.4f} | '
              f'komponen={list(cols_w.keys())}')
     return buildings
-
 
 def classify_edi(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
@@ -769,11 +693,6 @@ def classify_edi(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     log.info(f'  Distribusi kelas: {dict(dist)}')
     return buildings
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §8  ANALISIS SENSITIVITAS BOBOT
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def sensitivity_analysis(buildings: gpd.GeoDataFrame) -> pd.DataFrame:
     """
     Uji sensitivitas EDI terhadap berbagai skenario bobot (Bagian 7.2).
@@ -795,7 +714,6 @@ def sensitivity_analysis(buildings: gpd.GeoDataFrame) -> pd.DataFrame:
         edi_this = bldg_tmp['EDI_tmp'].values
         rho, p   = spearmanr(baseline, edi_this)
 
-        # Identifikasi bangunan TOP-20 yang stabil
         top20_base = set(np.argsort(baseline)[-20:])
         top20_this = set(np.argsort(edi_this)[-20:])
         stable_pct = len(top20_base & top20_this) / 20 * 100
@@ -822,28 +740,22 @@ def sensitivity_analysis(buildings: gpd.GeoDataFrame) -> pd.DataFrame:
     log.info(f'  → {out}')
     return df_sens
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §9  VISUALISASI
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def _north_arrow_scale(ax, bldg_wm: gpd.GeoDataFrame) -> None:
     """Tambahkan panah utara dan scalebar ke ax (Web Mercator)."""
     x0, x1 = ax.get_xlim()
     y0, y1  = ax.get_ylim()
     dx, dy  = x1-x0, y1-y0
-    # Panah utara
+   
     nx, ny = x0+dx*0.96, y0+dy*0.92
     ax.annotate('', xy=(nx, ny), xytext=(nx, ny-dy*0.06),
                 arrowprops=dict(arrowstyle='->', color='black', lw=2))
     ax.text(nx, ny+dy*0.01, 'N', ha='center', va='bottom',
             fontsize=12, fontweight='bold')
-    # Scalebar 100 m
+   
     sb_x = x0 + dx*0.05
     sb_y = y0 + dy*0.04
     ax.plot([sb_x, sb_x+100], [sb_y, sb_y], 'k-', lw=4)
     ax.text(sb_x+50, sb_y+dy*0.012, '100 m', ha='center', fontsize=8)
-
 
 def plot_edi_map(buildings: gpd.GeoDataFrame) -> None:
     """Peta kartografi statis choropleth EDI per bangunan."""
@@ -852,12 +764,10 @@ def plot_edi_map(buildings: gpd.GeoDataFrame) -> None:
     bldg_wm = buildings.to_crs('EPSG:3857')
     fig, ax  = plt.subplots(1, 1, figsize=(14, 10))
 
-    # 1. Gambar bangunan tanpa garis tepi, letakkan di layer teratas (zorder=2)
     bldg_wm.plot(column='env_deg_index', cmap=EDI_CMAP,
                   edgecolor='none', legend=False,
                   ax=ax, vmin=0, vmax=1, zorder=2)
 
-    # 2. Tambahkan peta dasar di layer bawah (zorder=1)
     if _opt['ctx']:
         try:
             _opt['ctx'].add_basemap(ax, source=_opt['ctx'].providers.CartoDB.Positron,
@@ -865,12 +775,10 @@ def plot_edi_map(buildings: gpd.GeoDataFrame) -> None:
         except Exception as e:
             log.warning(f'  Peta dasar gagal dimuat: {e}')
 
-    # 3. KUNCI KOORDINAT KAMERA KE AREA BANGUNAN (Penyelamat blank image)
     xmin, ymin, xmax, ymax = bldg_wm.total_bounds
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
 
-    # 4. Colorbar
     sm   = plt.cm.ScalarMappable(cmap=EDI_CMAP, norm=mcolors.Normalize(0,1))
     cbar = fig.colorbar(sm, ax=ax, fraction=0.025, pad=0.02, aspect=30)
     cbar.set_label('Environmental Degradation Index (EDI)', fontweight='bold')
@@ -878,7 +786,6 @@ def plot_edi_map(buildings: gpd.GeoDataFrame) -> None:
     cbar.set_ticklabels(['0.0\n(Baik)', f'{CFG["thr_low"]}',
                           f'{CFG["thr_high"]}', '1.0\n(Terdegradasi)'])
 
-    # 5. Panah Utara & Skala
     try:
         _north_arrow_scale(ax, bldg_wm)
     except Exception as e:
@@ -897,14 +804,12 @@ def plot_edi_map(buildings: gpd.GeoDataFrame) -> None:
             transform=ax.transAxes, fontsize=7, color='#555', va='bottom')
     ax.set_axis_off()
     
-    # Hapus spasi berlebih
     plt.tight_layout()
 
     path = OUT + 'maps/task3_edi_map.png'
     plt.savefig(path, dpi=300)
     plt.close()
     log.info(f'  → {path}')
-
 
 def plot_indicator_maps(buildings: gpd.GeoDataFrame) -> None:
     """Panel peta 6 indikator lingkungan (satu subplot per indikator)."""
@@ -923,11 +828,9 @@ def plot_indicator_maps(buildings: gpd.GeoDataFrame) -> None:
     for i, (ind, meta) in enumerate(inds):
         ax = axes[i]
         
-        # 1. Gambar indikator bangunan DULUAN
         bldg_wm.plot(column=ind, cmap=meta['cmap'], 
                       edgecolor='none', legend=False, ax=ax, zorder=2)
         
-        # 2. Tambahkan peta dasar
         if _opt['ctx']:
             try:
                 _opt['ctx'].add_basemap(ax,
@@ -959,7 +862,6 @@ def plot_indicator_maps(buildings: gpd.GeoDataFrame) -> None:
     plt.close()
     log.info(f'  → {path}')
 
-
 def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
     """Peta interaktif Folium dengan layer-switcher per indikator."""
     if _opt['folium'] is None:
@@ -980,7 +882,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
         if v >= CFG['thr_low']:  return CLASS_COLORS['Sedang']
         return CLASS_COLORS['Rendah']
 
-    # ── Layer EDI utama ──────────────────────────────────────────────────────
     tooltip_fields = ['bldg_id','env_deg_index','env_class','env_rank']
     tooltip_alias  = ['ID Bangunan','EDI','Kelas Degradasi','Ranking']
     for ind in IND_META:
@@ -1006,7 +907,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
         highlight_function=lambda _: {'weight': 2, 'color': 'black'}
     ).add_to(m)
 
-    # ── Marker TOP-20 paling terdegradasi ────────────────────────────────────
     top20 = bldg_geo.nsmallest(20, 'env_rank')
     for _, row in top20.iterrows():
         c = row.geometry.centroid
@@ -1016,7 +916,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
             tooltip=f"Rank #{row['env_rank']} | EDI={row['env_deg_index']:.3f}"
         ).add_to(m)
 
-    # ── Legend ───────────────────────────────────────────────────────────────
     legend = f"""
     <div style="position:fixed;bottom:25px;right:15px;z-index:9999;
                 background:white;padding:12px 16px;border-radius:8px;
@@ -1039,7 +938,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
     path = OUT + 'maps/task3_edi_interactive.html'
     m.save(path)
     log.info(f'  → {path}')
-
 
 def plot_analysis_charts(buildings: gpd.GeoDataFrame,
                           pca_res: dict, km_res: dict,
@@ -1071,7 +969,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     ind_labels = [ind for ind in IND_META if f'{ind}_norm' in buildings.columns]
     buildings['env_class'] = buildings['env_class'].astype(str)
 
-    # ── A: Distribusi EDI ────────────────────────────────────────────────────
     sns.histplot(buildings['env_deg_index'], bins=30, kde=True,
                   color='#d73027', ax=ax_A, edgecolor='white',
                   linewidth=0.5, alpha=0.70)
@@ -1087,7 +984,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
                   transform=ax_A.transAxes, ha='right', va='top',
                   fontsize=8, color=clr, fontweight='bold')
 
-    # ── B: Korelasi indikator ─────────────────────────────────────────────────
     if len(norm_cols) >= 2:
         corr_data = buildings[norm_cols].copy()
         corr_data.columns = ind_labels
@@ -1103,7 +999,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
         ax_B.tick_params(axis='x', rotation=30, labelsize=9)
         ax_B.tick_params(axis='y', rotation=0, labelsize=9)
 
-    # ── C: PCA Biplot ─────────────────────────────────────────────────────────
     if pca_res and 'scores' in pca_res:
         scores   = pca_res['scores']
         loadings = pca_res['loadings']
@@ -1117,7 +1012,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
                            s=12, alpha=0.6, edgecolors='none', vmin=0, vmax=1)
         fig.colorbar(sc, ax=ax_C, fraction=0.04, pad=0.02).set_label('EDI', fontsize=8)
 
-        # Loading arrows (skala × 2 untuk visibilitas)
         scale = 2.0
         for j, ind_n in enumerate(loadings.index):
             lx = loadings['PC1'].iloc[j] * scale
@@ -1137,7 +1031,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
         ax_C.set_title('C. PCA Biplot (Loadings + Building Scores)',
                         fontweight='bold')
 
-    # ── D: K-Means cluster profile ────────────────────────────────────────────
     if km_res and 'centers' in km_res:
         centers = km_res['centers']
         x_pos   = np.arange(len(centers.columns))
@@ -1154,12 +1047,11 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
                         f'sil={km_res["best_sil"]:.3f})', fontweight='bold')
         ax_D.legend(fontsize=7, loc='upper right')
 
-    # ── E: Box plot indikator per kelas EDI ──────────────────────────────────
     if len(norm_cols) >= 1:
         melt_cols = ['env_class'] + ind_labels
         bldg_melt = buildings[[c for c in melt_cols
                                 if c in buildings.columns]].copy()
-        # Rename norm → raw untuk visualisasi yg lebih intuitif
+       
         for ind in ind_labels:
             if ind in bldg_melt.columns:
                 bldg_melt[ind] = buildings[ind].values
@@ -1180,7 +1072,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
         ax_E.legend(title='Kelas EDI', fontsize=8, title_fontsize=8,
                     loc='upper right')
 
-    # ── F: Sensitivitas skenario bobot ────────────────────────────────────────
     if not df_sens.empty:
         x_scen = range(len(df_sens))
         ax_F.bar(x_scen, df_sens['EDI_mean'], alpha=0.5,
@@ -1203,7 +1094,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
         lines2, lbl2 = ax_F2.get_legend_handles_labels()
         ax_F.legend(lines1+lines2, lbl1+lbl2, fontsize=8, loc='upper left')
 
-    # Catatan ML
     if gbr_res:
         note = (f'[ML] GBR {CFG["cv_k"]}-Fold CV → '
                 f'R²={gbr_res.get("r2",0):.4f} | MAE={gbr_res.get("mae",0):.4f}')
@@ -1223,7 +1113,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     plt.close()
     log.info(f'  → {path}')
 
-
 def plot_sensitivity_detail(df_sens: pd.DataFrame) -> None:
     """Grafik sensitivitas bobot yang lebih detail: radar + heatmap."""
     if df_sens.empty:
@@ -1233,7 +1122,6 @@ def plot_sensitivity_detail(df_sens: pd.DataFrame) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
     fig.suptitle('Analisis Sensitivitas Bobot EDI', fontsize=13, fontweight='bold')
 
-    # ── Heatmap bobot per skenario ────────────────────────────────────────────
     w_cols = [c for c in df_sens.columns if c.startswith('w_')]
     W      = df_sens.set_index('Skenario')[w_cols].T
     W.index = [c.replace('w_','') for c in W.index]
@@ -1244,7 +1132,6 @@ def plot_sensitivity_detail(df_sens: pd.DataFrame) -> None:
     axes[0].set_xlabel('Skenario', fontsize=10)
     axes[0].set_ylabel('Indikator', fontsize=10)
 
-    # ── Stability bar + Spearman rho ─────────────────────────────────────────
     x    = np.arange(len(df_sens))
     ax_b = axes[1]
     bars = ax_b.barh(x, df_sens['stable_top20_%'], color='#4575b4',
@@ -1267,11 +1154,6 @@ def plot_sensitivity_detail(df_sens: pd.DataFrame) -> None:
     plt.close()
     log.info(f'  → {path}')
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §10  EKSPOR
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def export_results(buildings: gpd.GeoDataFrame,
                     pca_res: dict, km_res: dict,
                     gbr_res: dict) -> None:
@@ -1287,23 +1169,19 @@ def export_results(buildings: gpd.GeoDataFrame,
     out_gdf  = buildings[out_cols].copy()
     out_gdf['env_class'] = out_gdf['env_class'].astype(str)
 
-    # GeoJSON
     geo_out = out_gdf.to_crs('EPSG:4326')
     gj_path = OUT + 'data/env_degradation_index.geojson'
     geo_out.to_file(gj_path, driver='GeoJSON')
     log.info(f'  → {gj_path}')
 
-    # CSV
     csv_path = OUT + 'data/env_summary.csv'
     geo_out.drop(columns='geometry').to_csv(csv_path, index=False)
     log.info(f'  → {csv_path}')
 
-    # Top-20 paling terdegradasi
     top_path = OUT + 'data/top20_degraded.csv'
     geo_out.drop(columns='geometry').nsmallest(20,'env_rank').to_csv(top_path, index=False)
     log.info(f'  → {top_path}')
 
-    # JSON ringkasan
     n_hi = int((buildings['env_class']=='Tinggi').sum())
     n_md = int((buildings['env_class']=='Sedang').sum())
     n_lo = int((buildings['env_class']=='Rendah').sum())
@@ -1377,11 +1255,6 @@ def export_results(buildings: gpd.GeoDataFrame,
     log.info('═'*60)
     log.info(f'  JSON summary → {json_path}')
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §11  PIPELINE UTAMA
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def main() -> gpd.GeoDataFrame:
     t_start = datetime.now()
     log.info('=' * 68)
@@ -1390,45 +1263,33 @@ def main() -> gpd.GeoDataFrame:
     log.info(f'  Dimulai: {t_start:%Y-%m-%d %H:%M:%S}')
     log.info('=' * 68)
 
-    # ── [1] Load ──────────────────────────────────────────────────────────────
     buildings = load_buildings(CFG['bldg_path'])
     sat_data  = load_all_satellite(buildings)
 
-    # ── [2] IDW interpolasi ke bangunan  (Task 3.1) ──────────────────────────
     buildings = assign_indicators_to_buildings(buildings, sat_data)
 
-    # ── [3] Normalisasi & penyesuaian arah  (Task 3.2a) ─────────────────────
     buildings = normalize_indicators(buildings)
 
-    # ── [4] WLC EDI awal (sebagai target ML) ─────────────────────────────────
     buildings = calculate_wlc_edi(buildings, CFG['weights'], 'EDI_wlc')
 
-    # ── [5] ML: PCA ──────────────────────────────────────────────────────────
     pca_res = run_pca_analysis(buildings)
 
-    # ── [6] ML: K-Means clustering ────────────────────────────────────────────
     km_res  = run_kmeans_clustering(buildings, pca_res)
 
-    # ── [7] ML: GBR spatial smoothing ────────────────────────────────────────
     gbr_res = smooth_edi_with_gbr(buildings, wlc_col='EDI_wlc')
 
-    # ── [8] EDI final = ensemble  (Task 3.2b) ────────────────────────────────
     buildings = calculate_final_edi(buildings, use_gbr=bool(gbr_res))
 
-    # ── [9] Klasifikasi ───────────────────────────────────────────────────────
     buildings = classify_edi(buildings)
 
-    # ── [10] Analisis sensitivitas ────────────────────────────────────────────
     df_sens = sensitivity_analysis(buildings)
 
-    # ── [11] Visualisasi ──────────────────────────────────────────────────────
     plot_edi_map(buildings)
     plot_indicator_maps(buildings)
     plot_interactive_map(buildings)
     plot_analysis_charts(buildings, pca_res, km_res, gbr_res, df_sens)
     plot_sensitivity_detail(df_sens)
 
-    # ── [12] Ekspor ───────────────────────────────────────────────────────────
     export_results(buildings, pca_res, km_res, gbr_res)
 
     elapsed = (datetime.now() - t_start).seconds
@@ -1436,7 +1297,5 @@ def main() -> gpd.GeoDataFrame:
     log.info(f'  Output tersimpan di: {OUT}')
     return buildings
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
 if __name__ == '__main__':
     result = main()
