@@ -27,7 +27,6 @@ from   matplotlib.colors        import LinearSegmentedColormap, BoundaryNorm
 from   matplotlib.gridspec      import GridSpec
 import seaborn                  as sns
 
-# Optional packages
 _opt = {}
 for _pkg, _key in [('contextily','ctx'), ('folium','folium'),
                     ('PIL.Image','pil'), ('xgboost','xgb')]:
@@ -52,12 +51,11 @@ matplotlib.rcParams.update({
     'ytick.labelsize'   : 9,
 })
 
-# ── Path input (output dari Task 1–3) ────────────────────────────────────────
 INPUT_PATHS = dict(
     task1 = 'output/task1/data/solar_pv_index.geojson',
     task2 = 'output/task2/data/economic_value_index.geojson',
     task3 = 'output/task3/data/env_degradation_index.geojson',
-    # Fallback CSV jika GeoJSON tidak tersedia
+   
     task1_csv = 'output/task1/data/solar_pv_summary.csv',
     task2_csv = 'output/task2/data/economic_value_summary.csv',
     task3_csv = 'output/task3/data/env_summary.csv',
@@ -67,19 +65,15 @@ OUT = 'output/task4/'
 for _s in ['', 'maps/', 'figures/', 'data/', 'report/']:
     Path(OUT + _s).mkdir(parents=True, exist_ok=True)
 
-# ── CRS ──────────────────────────────────────────────────────────────────────
 GEO_CRS  = 'EPSG:4326'
-PROJ_CRS = 'EPSG:32648'   # ← Sesuaikan dengan zona UTM area studi
+PROJ_CRS = 'EPSG:32648'  
 
-# ── Nama kolom indeks dari setiap task ───────────────────────────────────────
-# Format: (kolom_utama, daftar_alternatif_jika_tidak_ada)
 COL_MAP = {
     'PV'   : ('solar_pv_index',   ['pv_index','pv_score','solar_index']),
     'Econ' : ('econ_value_index', ['economic_index','econ_index','economic_value']),
     'Env'  : ('env_deg_index',    ['env_index','environmental_index','edi','env_degradation_index']),
 }
 
-# ── Bobot WLC — 6 skenario ───────────────────────────────────────────────────
 WLC_SCENARIOS = {
     'Baseline'         : {'PV': 0.40, 'Econ': 0.35, 'Env': 0.25},
     'PV_Dominant'      : {'PV': 0.60, 'Econ': 0.25, 'Env': 0.15},
@@ -89,38 +83,34 @@ WLC_SCENARIOS = {
     'Tech_Viability'   : {'PV': 0.50, 'Econ': 0.35, 'Env': 0.15},
 }
 
-# ── Matriks AHP — 5 skenario (skala Saaty 1–9) ───────────────────────────────
-# Baris/kolom = [PV, Econ, Env]
-# aᵢⱼ > 1: baris i lebih penting dari kolom j
 AHP_MATRICES = {
-    'AHP_Balanced': [       # PV sedikit lebih penting
+    'AHP_Balanced': [      
         [1,   2,   3  ],
         [1/2, 1,   2  ],
         [1/3, 1/2, 1  ],
     ],
-    'AHP_PV_Focus': [       # PV sangat dominan
+    'AHP_PV_Focus': [      
         [1,   3,   5  ],
         [1/3, 1,   2  ],
         [1/5, 1/2, 1  ],
     ],
-    'AHP_Econ_Focus': [     # Economics dominan
+    'AHP_Econ_Focus': [    
         [1,   1/2, 2  ],
         [2,   1,   3  ],
         [1/2, 1/3, 1  ],
     ],
-    'AHP_Env_Focus': [      # Environment dominan
+    'AHP_Env_Focus': [     
         [1,   2,   1/3],
         [1/2, 1,   1/5],
         [3,   5,   1  ],
     ],
-    'AHP_Equal': [          # Semua sama penting
+    'AHP_Equal': [         
         [1,   1,   1  ],
         [1,   1,   1  ],
         [1,   1,   1  ],
     ],
 }
 
-# ── Parameter ML ─────────────────────────────────────────────────────────────
 ML_CFG = dict(
     rf_n        = 300,
     rf_seed     = 42,
@@ -131,29 +121,24 @@ ML_CFG = dict(
     min_samples = 20,
 )
 
-# ── Monte Carlo ───────────────────────────────────────────────────────────────
-MC_N_SIM  = 10_000   # jumlah simulasi
+MC_N_SIM  = 10_000  
 MC_SEED   = 42
-MC_ALPHA  = [1, 1, 1]   # Dirichlet hyperparameter (uniform simplex)
+MC_ALPHA  = [1, 1, 1]  
 
-# ── Klasifikasi prioritas ─────────────────────────────────────────────────────
 THR_LOW  = 0.33
 THR_HIGH = 0.67
-TOP_N    = 20    # jumlah bangunan prioritas tertinggi yang dilaporkan
+TOP_N    = 20   
 
-# ── Warna ────────────────────────────────────────────────────────────────────
 PRIORITY_COLORS = {
-    'Tinggi' : '#d73027',   # merah — prioritas tertinggi
-    'Sedang' : '#fdae61',   # oranye
-    'Rendah' : '#4dac26',   # hijau — prioritas rendah
+    'Tinggi' : '#d73027',  
+    'Sedang' : '#fdae61',  
+    'Rendah' : '#4dac26',  
 }
 PRIORITY_ORDER = ['Rendah', 'Sedang', 'Tinggi']
 PRIORITY_CMAP  = LinearSegmentedColormap.from_list(
     'priority', ['#4dac26','#ffffbf','#d73027'], N=256
 )
 CRITERIA_COLORS = {'PV': '#1d6ba0', 'Econ': '#e6850e', 'Env': '#2ca02c'}
-
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -166,21 +151,18 @@ logging.basicConfig(
 )
 log = logging.getLogger('Task4')
 
-
-
 def _find_col(df: pd.DataFrame, key: str) -> str | None:
     """Cari kolom indeks dengan fallback ke nama alternatif."""
     primary, alternatives = COL_MAP[key]
     for candidate in [primary] + alternatives:
         if candidate in df.columns:
             return candidate
-    # Coba partial match (kolom yang mengandung kata kunci)
+   
     kw = key.lower()
     for c in df.columns:
         if kw in c.lower() and 'class' not in c.lower() and 'rank' not in c.lower():
             return c
     return None
-
 
 def _load_geojson_or_csv(geojson_path: str, csv_path: str,
                            label: str) -> gpd.GeoDataFrame | None:
@@ -192,7 +174,7 @@ def _load_geojson_or_csv(geojson_path: str, csv_path: str,
 
     if Path(csv_path).exists():
         df  = pd.read_csv(csv_path)
-        # Buat geometry dummy jika tidak ada kolom geometri
+       
         if 'geometry' not in df.columns:
             df['geometry'] = [Point(0, 0)] * len(df)
         gdf = gpd.GeoDataFrame(df, crs=GEO_CRS)
@@ -201,7 +183,6 @@ def _load_geojson_or_csv(geojson_path: str, csv_path: str,
 
     log.warning(f'  [{label}] Tidak ada data ditemukan')
     return None
-
 
 def _generate_demo_data(n: int = 200) -> gpd.GeoDataFrame:
     """
@@ -212,11 +193,10 @@ def _generate_demo_data(n: int = 200) -> gpd.GeoDataFrame:
     rng   = np.random.RandomState(42)
     theta = rng.uniform(0, 2*np.pi, n)
     r     = rng.uniform(0, 0.005, n)
-    cx, cy = 106.82, -6.18   # Jakarta sebagai contoh
+    cx, cy = 106.82, -6.18  
     lons  = cx + r * np.cos(theta)
     lats  = cy + r * np.sin(theta)
 
-    # Simulasikan korelasi spasial ringan: PV ↔ Econ positif lemah
     pv_base   = rng.beta(2, 2, n)
     econ_base = 0.4*pv_base + 0.6*rng.beta(2, 3, n)
     env_base  = rng.beta(2, 2, n)
@@ -243,7 +223,6 @@ def _generate_demo_data(n: int = 200) -> gpd.GeoDataFrame:
     log.info(f'  [DEMO] {len(gdf):,} bangunan sintetis berhasil dibuat')
     return gdf
 
-
 def load_and_merge(demo: bool = False) -> gpd.GeoDataFrame:
     """
     Muat output Task 1–3, normalisasi nama kolom, dan gabungkan ke satu GeoDataFrame.
@@ -258,18 +237,15 @@ def load_and_merge(demo: bool = False) -> gpd.GeoDataFrame:
     gdf2 = _load_geojson_or_csv(INPUT_PATHS['task2'], INPUT_PATHS['task2_csv'], 'Task2')
     gdf3 = _load_geojson_or_csv(INPUT_PATHS['task3'], INPUT_PATHS['task3_csv'], 'Task3')
 
-    # Jika semua gagal → demo
     if all(g is None for g in [gdf1, gdf2, gdf3]):
         log.warning('[LOAD] Semua output Task hilang → mode demo')
         return _generate_demo_data()
 
-    # Gunakan Task 1 sebagai base (memiliki geometri bangunan)
     base = gdf1 if gdf1 is not None else (gdf2 if gdf2 is not None else gdf3)
     if base.crs is None:
         base = base.set_crs(GEO_CRS)
     base = base.to_crs(GEO_CRS)
 
-    # Temukan dan normalisasi kolom indeks dari tiap task
     def _extract(gdf, key, task_label):
         if gdf is None:
             return None, None
@@ -284,7 +260,6 @@ def load_and_merge(demo: bool = False) -> gpd.GeoDataFrame:
     g2, c2 = _extract(gdf2, 'Econ', 'Task2')
     g3, c3 = _extract(gdf3, 'Env',  'Task3')
 
-    # ── Join via bldg_id (utama) ──────────────────────────────────────────────
     def _join_by_id(base_df, src_df, src_col, new_col):
         if src_df is None or src_col is None:
             base_df[new_col] = np.nan
@@ -297,7 +272,6 @@ def load_and_merge(demo: bool = False) -> gpd.GeoDataFrame:
             if n_ok > 0:
                 return base_df
 
-        # Fallback: spatial nearest-neighbour join
         log.info(f'  Fallback → Spatial NN join ({new_col})')
         bpts = np.column_stack([
             base_df.geometry.centroid.x.values,
@@ -316,7 +290,6 @@ def load_and_merge(demo: bool = False) -> gpd.GeoDataFrame:
     base = _join_by_id(base, g2, c2, 'econ_value_index')
     base = _join_by_id(base, g3, c3, 'env_deg_index')
 
-    # Isi NaN residual dengan median
     for col in ['solar_pv_index', 'econ_value_index', 'env_deg_index']:
         n_nan = base[col].isna().sum()
         if n_nan:
@@ -326,11 +299,9 @@ def load_and_merge(demo: bool = False) -> gpd.GeoDataFrame:
             base[col] = base[col].fillna(med)
             log.warning(f'  {n_nan} NaN di {col} → diisi median ({med:.4f})')
 
-    # Clip ke [0, 1]
     for col in ['solar_pv_index', 'econ_value_index', 'env_deg_index']:
         base[col] = base[col].clip(0, 1)
 
-    # Pastikan bldg_id ada
     if 'bldg_id' not in base.columns:
         base['bldg_id'] = base.index.astype(int)
 
@@ -339,8 +310,6 @@ def load_and_merge(demo: bool = False) -> gpd.GeoDataFrame:
              f'Econ={base["econ_value_index"].mean():.3f} | '
              f'Env={base["env_deg_index"].mean():.3f}')
     return base.reset_index(drop=True)
-
-
 
 class AHPAnalyzer:
     """
@@ -391,7 +360,6 @@ class AHPAnalyzer:
         RI  = self.RI.get(self.n, 1.49)
         CR  = CI / RI if RI > 0 else 0.0
 
-        # Geometric mean approximation (cross-check)
         gm      = np.prod(self.A, axis=1) ** (1.0 / self.n)
         w_gm    = gm / gm.sum()
 
@@ -408,7 +376,6 @@ class AHPAnalyzer:
             'matrix'      : self.A.tolist(),
         }
         return result
-
 
 def run_all_ahp(buildings: pd.DataFrame) -> dict:
     """Jalankan semua skenario AHP dan kembalikan ringkasan."""
@@ -427,13 +394,10 @@ def run_all_ahp(buildings: pd.DataFrame) -> dict:
 
     return results
 
-
-
 def _normalize_weights(w: dict) -> dict:
     """Normalisasi bobot agar Σwᵢ = 1."""
     total = sum(w.values())
     return {k: v/total for k, v in w.items()}
-
 
 def wlc_score(buildings: gpd.GeoDataFrame,
                weights: dict,
@@ -450,7 +414,6 @@ def wlc_score(buildings: gpd.GeoDataFrame,
          w.get('Env',  0) * buildings['env_deg_index'])
     buildings[col_out] = s.clip(0, 1)
     return buildings
-
 
 def topsis_score(buildings: gpd.GeoDataFrame,
                   weights: dict,
@@ -475,24 +438,19 @@ def topsis_score(buildings: gpd.GeoDataFrame,
     X    = buildings[cols].values.astype(float)
     W    = np.array([w.get(k, 0) for k in keys])
 
-    # Step 1–2: weighted normalized matrix
     norms = np.sqrt((X**2).sum(axis=0))
     norms = np.where(norms < 1e-10, 1.0, norms)
     V     = (X / norms) * W
 
-    # Step 3: ideal solutions (semua beneficial)
     A_pos = V.max(axis=0)
     A_neg = V.min(axis=0)
 
-    # Step 4: Euclidean distances
     d_pos = np.sqrt(((V - A_pos)**2).sum(axis=1))
     d_neg = np.sqrt(((V - A_neg)**2).sum(axis=1))
 
-    # Step 5: closeness coefficient [0, 1]
     C = d_neg / (d_pos + d_neg + 1e-12)
     buildings[col_out] = MinMaxScaler().fit_transform(C.reshape(-1,1)).ravel()
     return buildings
-
 
 def run_all_wlc(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Jalankan semua skenario WLC + TOPSIS dan simpan tiap kolom."""
@@ -501,13 +459,9 @@ def run_all_wlc(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         buildings = wlc_score(buildings, w, f'wlc_{name}')
         log.info(f'  WLC {name:<22}: mean={buildings[f"wlc_{name}"].mean():.4f}')
 
-    # TOPSIS dengan bobot Baseline
     buildings = topsis_score(buildings, WLC_SCENARIOS['Baseline'], 'score_topsis')
     log.info(f'  TOPSIS (Baseline)      : mean={buildings["score_topsis"].mean():.4f}')
     return buildings
-
-
-
 
 def _engineer_features(buildings: gpd.GeoDataFrame) -> np.ndarray:
     """
@@ -522,7 +476,6 @@ def _engineer_features(buildings: gpd.GeoDataFrame) -> np.ndarray:
     ec   = buildings['econ_value_index'].values
     ev   = buildings['env_deg_index'].values
 
-    # Koordinat proyeksi (jika tersedia)
     try:
         bldg_p = buildings.to_crs(PROJ_CRS)
         cx = MinMaxScaler().fit_transform(
@@ -533,19 +486,18 @@ def _engineer_features(buildings: gpd.GeoDataFrame) -> np.ndarray:
         cx = cy = np.zeros(len(buildings))
 
     X = np.column_stack([
-        pv, ec, ev,           # fitur utama
-        pv*ec,                # PV × Economics
-        pv*ev,                # PV × Environment
-        ec*ev,                # Economics × Environment
-        pv*ec*ev,             # tiga-arah
-        np.mean([pv,ec,ev], axis=0),   # rata-rata
-        np.min([pv,ec,ev], axis=0),    # minimum
-        np.max([pv,ec,ev], axis=0),    # maksimum
-        np.sqrt(pv**2+ec**2+ev**2),    # norma Euclidean
-        cx, cy,               # spasial
+        pv, ec, ev,          
+        pv*ec,               
+        pv*ev,               
+        ec*ev,               
+        pv*ec*ev,            
+        np.mean([pv,ec,ev], axis=0),  
+        np.min([pv,ec,ev], axis=0),   
+        np.max([pv,ec,ev], axis=0),   
+        np.sqrt(pv**2+ec**2+ev**2),   
+        cx, cy,              
     ])
     return X
-
 
 def ml_ensemble(buildings: gpd.GeoDataFrame,
                  target_col: str = 'wlc_Baseline') -> tuple:
@@ -574,7 +526,6 @@ def ml_ensemble(buildings: gpd.GeoDataFrame,
     y = buildings[target_col].values
     kf = KFold(n_splits=ML_CFG['cv_k'], shuffle=True, random_state=ML_CFG['rf_seed'])
 
-    # ── RandomForest ─────────────────────────────────────────────────────────
     rf = RandomForestRegressor(
         n_estimators   = ML_CFG['rf_n'],
         max_features   = 'sqrt',
@@ -588,7 +539,6 @@ def ml_ensemble(buildings: gpd.GeoDataFrame,
     rf.fit(X, y)
     log.info(f'  RandomForest {ML_CFG["cv_k"]}-Fold → R²={r2_rf:.4f} | MAE={mae_rf:.4f}')
 
-    # ── GBR ──────────────────────────────────────────────────────────────────
     gbr = GradientBoostingRegressor(
         n_estimators   = ML_CFG['gbr_n'],
         learning_rate  = ML_CFG['gbr_lr'],
@@ -603,7 +553,6 @@ def ml_ensemble(buildings: gpd.GeoDataFrame,
     gbr.fit(X, y)
     log.info(f'  GBR        {ML_CFG["cv_k"]}-Fold → R²={r2_gbr:.4f} | MAE={mae_gbr:.4f}')
 
-    # ── XGBoost (opsional) ───────────────────────────────────────────────────
     xgb_metrics = {}
     if _opt['xgb']:
         xgb  = _opt['xgb'].XGBRegressor(
@@ -618,16 +567,14 @@ def ml_ensemble(buildings: gpd.GeoDataFrame,
         xgb_metrics = {'r2': r2_xgb, 'mae': mae_xgb}
         log.info(f'  XGBoost    {ML_CFG["cv_k"]}-Fold → R²={r2_xgb:.4f} | MAE={mae_xgb:.4f}')
 
-    # ── Ensemble prediksi ─────────────────────────────────────────────────────
     pred_rf  = rf.predict(X)
     pred_gbr = gbr.predict(X)
-    # Bobot ensemble proporsional R² (model lebih baik, bobot lebih besar)
+   
     w_rf  = max(r2_rf,  0) + 1e-6
     w_gbr = max(r2_gbr, 0) + 1e-6
     pred  = (w_rf*pred_rf + w_gbr*pred_gbr) / (w_rf + w_gbr)
     buildings['priority_ml'] = MinMaxScaler().fit_transform(pred.reshape(-1,1)).ravel()
 
-    # Feature importance
     feat_names = ['PV','Econ','Env',
                    'PV×Econ','PV×Env','Econ×Env','PV×Econ×Env',
                    'mean','min','max','norm','cx','cy']
@@ -652,9 +599,6 @@ def ml_ensemble(buildings: gpd.GeoDataFrame,
     }
     return buildings, metrics
 
-
-
-
 def calculate_final_priority(buildings: gpd.GeoDataFrame,
                                ml_metrics: dict) -> gpd.GeoDataFrame:
     """
@@ -669,11 +613,10 @@ def calculate_final_priority(buildings: gpd.GeoDataFrame,
     """
     log.info('[FINAL] Menghitung skor prioritas final (ensemble 4 metode)...')
 
-    # ── AHP score untuk skenario Balanced ────────────────────────────────────
     if 'ahp_weights' in buildings.columns:
         ahp_col = 'ahp_weights'
     else:
-        # Hitung inline dari AHP Balanced
+       
         ahp = AHPAnalyzer(['PV','Econ','Env'], AHP_MATRICES['AHP_Balanced'])
         r   = ahp.compute()
         w   = r['weights']
@@ -683,7 +626,6 @@ def calculate_final_priority(buildings: gpd.GeoDataFrame,
             w['Env']  * buildings['env_deg_index']
         ).clip(0, 1)
 
-    # ── Ensemble ─────────────────────────────────────────────────────────────
     has_ml = 'priority_ml' in buildings.columns and ml_metrics
 
     components = {
@@ -693,7 +635,7 @@ def calculate_final_priority(buildings: gpd.GeoDataFrame,
         'priority_ml' : 0.10 if has_ml else 0.0,
     }
     if not has_ml:
-        # Redistribusi bobot ML ke WLC
+       
         components['wlc_Baseline'] += 0.10
     total_w = sum(components.values())
 
@@ -711,7 +653,6 @@ def calculate_final_priority(buildings: gpd.GeoDataFrame,
              f'std={buildings["priority_score"].std():.4f} | '
              f'komponen={[k for k,v in components.items() if v>0]}')
     return buildings
-
 
 def classify_and_rank(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
@@ -736,9 +677,6 @@ def classify_and_rank(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     log.info(f'  Distribusi kelas: {dict(dist)}')
     return buildings
 
-
-
-
 def monte_carlo_sensitivity(buildings: gpd.GeoDataFrame) -> tuple:
     """
     Monte Carlo dengan distribusi Dirichlet(1,1,1) untuk sampling bobot seragam
@@ -761,12 +699,10 @@ def monte_carlo_sensitivity(buildings: gpd.GeoDataFrame) -> tuple:
                          'env_deg_index']].values.astype(float)
     n_alt = len(buildings)
 
-    # Sample bobot sekaligus (vektorisasi penuh)
-    W          = rng.dirichlet(MC_ALPHA, size=MC_N_SIM)   # (N_SIM, 3)
-    scores_all = X @ W.T                                    # (n_alt, N_SIM)
+    W          = rng.dirichlet(MC_ALPHA, size=MC_N_SIM)  
+    scores_all = X @ W.T                                   
 
-    # Ranking: argsort descending → argsort → rank 1 = terbaik
-    order_all  = np.argsort(-scores_all, axis=0)           # (n_alt, N_SIM)
+    order_all  = np.argsort(-scores_all, axis=0)          
     ranks_all  = np.empty_like(order_all)
     idx_rows   = np.arange(n_alt)
     for s in range(MC_N_SIM):
@@ -797,7 +733,6 @@ def monte_carlo_sensitivity(buildings: gpd.GeoDataFrame) -> tuple:
         'W_samples'    : W,
     }
     return buildings, mc_meta
-
 
 def scenario_comparison(buildings: gpd.GeoDataFrame) -> pd.DataFrame:
     """
@@ -837,7 +772,6 @@ def scenario_comparison(buildings: gpd.GeoDataFrame) -> pd.DataFrame:
             f'stable_top{TOP_N}_pct': round(stable_pct, 1),
         })
 
-    # Tambahkan TOPSIS dan ML
     for col, label in [('score_topsis','TOPSIS'), ('priority_ml','ML_Ensemble')]:
         if col in buildings.columns:
             vals = buildings[col].values
@@ -861,7 +795,6 @@ def scenario_comparison(buildings: gpd.GeoDataFrame) -> pd.DataFrame:
     df.to_csv(path, index=False)
     log.info(f'  {len(df)} skenario → {path}')
     return df
-
 
 def quadrant_analysis(buildings: gpd.GeoDataFrame) -> dict:
     """
@@ -900,8 +833,6 @@ def quadrant_analysis(buildings: gpd.GeoDataFrame) -> dict:
                  f'Leader-{l2}={q3} Laggard={q4}')
     return results
 
-
-
 def _add_map_elements(ax, bldg_wm: gpd.GeoDataFrame) -> None:
     """Tambah north arrow, scalebar, dan metadata ke axes peta."""
     x0, x1 = ax.get_xlim()
@@ -916,12 +847,10 @@ def _add_map_elements(ax, bldg_wm: gpd.GeoDataFrame) -> None:
     ax.plot([sb_x, sb_x+100], [sb_y, sb_y], 'k-', lw=4)
     ax.text(sb_x+50, sb_y+dy*0.014, '100 m', ha='center', fontsize=8)
 
-
 def _fmt(x, _=None):
     if abs(x) >= 1e6: return f'{x/1e6:.1f}M'
     if abs(x) >= 1e3: return f'{x/1e3:.1f}k'
     return f'{x:.0f}'
-
 
 def plot_priority_map(buildings: gpd.GeoDataFrame) -> None:
     """
@@ -934,14 +863,12 @@ def plot_priority_map(buildings: gpd.GeoDataFrame) -> None:
                                gridspec_kw={'width_ratios': [3, 1]})
 
     ax   = axes[0]
-    ax_l = axes[1]   # panel legend + statistik
+    ax_l = axes[1]  
 
-    # 1. Gambar bangunan tanpa garis tepi (zorder=2)
     bldg_wm.plot(column='priority_score', cmap=PRIORITY_CMAP,
                   edgecolor='none', legend=False,
                   ax=ax, vmin=0, vmax=1, zorder=2)
 
-    # 2. Panggil peta dasar di layer paling bawah (zorder=1)
     if _opt['ctx']:
         try:
             _opt['ctx'].add_basemap(ax,
@@ -949,19 +876,16 @@ def plot_priority_map(buildings: gpd.GeoDataFrame) -> None:
                 zoom='auto', alpha=0.50, crs='EPSG:3857', zorder=1)
         except Exception: pass
 
-    # 3. KUNCI KOORDINAT KAMERA KE AREA BANGUNAN
     xmin, ymin, xmax, ymax = bldg_wm.total_bounds
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
 
-    # Colorbar
     sm   = plt.cm.ScalarMappable(cmap=PRIORITY_CMAP, norm=mcolors.Normalize(0, 1))
     cbar = fig.colorbar(sm, ax=ax, fraction=0.022, pad=0.015, aspect=35)
     cbar.set_label('Priority Score', fontsize=11, fontweight='bold')
     cbar.set_ticks([0, THR_LOW, THR_HIGH, 1])
     cbar.set_ticklabels(['0.0\n(Rendah)', f'{THR_LOW}', f'{THR_HIGH}', '1.0\n(Tinggi)'])
 
-    # Panah Utara & Skala
     try:
         _add_map_elements(ax, bldg_wm)
     except Exception as e:
@@ -979,7 +903,6 @@ def plot_priority_map(buildings: gpd.GeoDataFrame) -> None:
             transform=ax.transAxes, fontsize=7, color='#555', va='bottom')
     ax.set_axis_off()
 
-    # ── Panel kanan: statistik & legend ──────────────────────────────────────
     ax_l.set_axis_off()
     y_pos = 0.98
     ax_l.text(0.05, y_pos, 'STATISTIK PRIORITAS', fontsize=11, fontweight='bold', transform=ax_l.transAxes, va='top')
@@ -998,7 +921,6 @@ def plot_priority_map(buildings: gpd.GeoDataFrame) -> None:
         ax_l.text(0.65, y_pos, val, fontsize=9, fontweight='bold', transform=ax_l.transAxes, va='top')
         y_pos -= 0.055
 
-    # Legend kelas
     y_pos -= 0.03
     ax_l.text(0.05, y_pos, 'KELAS PRIORITAS', fontsize=10, fontweight='bold', transform=ax_l.transAxes, va='top')
     y_pos -= 0.06
@@ -1010,7 +932,6 @@ def plot_priority_map(buildings: gpd.GeoDataFrame) -> None:
         ax_l.text(0.25, y_pos - 0.008, cls, fontsize=9, transform=ax_l.transAxes, va='center')
         y_pos -= 0.06
 
-    # Top-5 bangunan
     y_pos -= 0.02
     ax_l.text(0.05, y_pos, 'TOP 5 PRIORITAS', fontsize=10, fontweight='bold', transform=ax_l.transAxes, va='top')
     y_pos -= 0.06
@@ -1026,7 +947,6 @@ def plot_priority_map(buildings: gpd.GeoDataFrame) -> None:
     plt.savefig(path, dpi=300)
     plt.close()
     log.info(f'  → {path}')
-
 
 def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
     """
@@ -1064,7 +984,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
             int(rgba[0]*255), int(rgba[1]*255), int(rgba[2]*255)
         )
 
-    # Tooltip fields
     tt_fields  = ['bldg_id','priority_score','priority_class','priority_rank',
                    'triple_winner','solar_pv_index','econ_value_index',
                    'env_deg_index','mc_prob_top20']
@@ -1084,7 +1003,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
 
     geojson_data = bldg_geo[tt_fields + ['geometry']].to_json()
 
-    # ── Layer 1: Priority Score ───────────────────────────────────────────────
     folium.GeoJson(
         geojson_data,
         name='🏆 Priority Score (Final)',
@@ -1100,7 +1018,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
         highlight_function=lambda _: {'weight': 2.5, 'color': 'black'}
     ).add_to(m)
 
-    # ── Layer 2–4: Individual Indices ─────────────────────────────────────────
     for idx_col, lbl, cmap_n in [
         ('solar_pv_index',   '☀ PV Index',   'YlOrRd'),
         ('econ_value_index', '💹 Econ Index', 'Blues'),
@@ -1117,7 +1034,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
             }
         ).add_to(m)
 
-    # ── Layer 5: Triple Winners ───────────────────────────────────────────────
     tw_gdf = bldg_geo[bldg_geo['triple_winner']] if 'triple_winner' in bldg_geo.columns else pd.DataFrame()
     if len(tw_gdf):
         folium.GeoJson(
@@ -1129,7 +1045,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
             }
         ).add_to(m)
 
-    # ── Top-N markers ─────────────────────────────────────────────────────────
     fg_top = folium.FeatureGroup(name=f'📍 Top-{TOP_N} Bangunan', show=True)
     topN   = bldg_geo.nsmallest(TOP_N, 'priority_rank')
     for _, row in topN.iterrows():
@@ -1143,7 +1058,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
         ).add_to(fg_top)
     fg_top.add_to(m)
 
-    # ── Legend ────────────────────────────────────────────────────────────────
     legend_html = f"""
     <div style="position:fixed;bottom:25px;right:15px;z-index:9999;
                 background:white;padding:14px 18px;border-radius:10px;
@@ -1168,7 +1082,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame) -> None:
     path = OUT + 'maps/task4_priority_interactive.html'
     m.save(path)
     log.info(f'  → {path}')
-
 
 def plot_analysis_charts(buildings: gpd.GeoDataFrame,
                           ahp_results: dict, ml_metrics: dict,
@@ -1207,7 +1120,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     c_ev = buildings['env_deg_index'].values
     c_pr = buildings['priority_score'].values
 
-    # ── A: Distribusi Priority Score ──────────────────────────────────────────
     for cls, clr in PRIORITY_COLORS.items():
         subset = buildings[buildings['priority_class']==cls]['priority_score']
         sns.kdeplot(subset, label=cls, color=clr, fill=True,
@@ -1227,7 +1139,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     ax['A'].set_title('A. Distribusi Priority Score', fontweight='bold')
     ax['A'].legend(fontsize=8, title='Kelas', title_fontsize=8)
 
-    # ── B–D: Scatter tiga pasangan ────────────────────────────────────────────
     scatter_pairs = [
         ('B', c_pv, c_ec, 'PV Index (O1)', 'Econ Index (O2)', 'B. PV vs Ekonomi'),
         ('C', c_pv, c_ev, 'PV Index (O1)', 'Env Index (O3)',  'C. PV vs Lingkungan'),
@@ -1236,10 +1147,10 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     for key, xs, ys, xl, yl, title in scatter_pairs:
         sc = ax[key].scatter(xs, ys, c=c_pr, cmap=PRIORITY_CMAP,
                               s=18, alpha=0.65, edgecolors='none', vmin=0, vmax=1)
-        # Medians
+       
         ax[key].axvline(np.median(xs), color='gray', ls=':', lw=1)
         ax[key].axhline(np.median(ys), color='gray', ls=':', lw=1)
-        # Triple Winners
+       
         tw_mask = buildings['triple_winner'].values if 'triple_winner' in buildings.columns \
                   else np.zeros(len(buildings), dtype=bool)
         if tw_mask.sum():
@@ -1255,7 +1166,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
         cb = fig.colorbar(sc, ax=ax[key], fraction=0.04, pad=0.02)
         cb.set_label('Priority', fontsize=7)
 
-    # ── E: AHP weight comparison ──────────────────────────────────────────────
     ahp_names  = list(ahp_results.keys())
     ahp_pv     = [ahp_results[n]['weights'].get('PV',   0) for n in ahp_names]
     ahp_ec     = [ahp_results[n]['weights'].get('Econ', 0) for n in ahp_names]
@@ -1277,7 +1187,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
         ax['E'].text(n, 0.70, f'CR={cr:.3f}', ha='center', fontsize=7,
                      color=clr, fontweight='bold')
 
-    # ── F: Scenario ranking heatmap mini ──────────────────────────────────────
     if not df_sens.empty:
         scen_cols = [c for c in buildings.columns if c.startswith('wlc_')][:5]
         if scen_cols:
@@ -1294,7 +1203,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
             ax['F'].tick_params(axis='x', rotation=30, labelsize=7)
             ax['F'].tick_params(axis='y', rotation=0, labelsize=7)
 
-    # ── G: Top-20 horizontal bar ──────────────────────────────────────────────
     top20 = buildings.nsmallest(TOP_N, 'priority_rank').copy()
     top20['label'] = [f"#{int(r['priority_rank'])} B{int(r['bldg_id'])}"
                       for _, r in top20.iterrows()]
@@ -1318,7 +1226,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     ax['G'].legend(fontsize=8, loc='lower right')
     ax['G'].set_xlim(0, 1.1)
 
-    # ── H: Kontribusi indikator ───────────────────────────────────────────────
     w_base  = WLC_SCENARIOS['Baseline']
     contrib = {
         'PV':   float(w_base['PV']   * buildings['solar_pv_index'].mean()),
@@ -1337,13 +1244,10 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
         at.set_fontweight('bold')
     ax['H'].set_title('H. Kontribusi Rata-rata\n(Baseline Weights)', fontweight='bold')
 
-    # Anotasi ML metrics
-    # Anotasi ML metrics
     if ml_metrics:
         rf_r2  = ml_metrics.get('rf',  {}).get('r2',  'N/A')
         gbr_r2 = ml_metrics.get('gbr', {}).get('r2',  'N/A')
         
-        # PERBAIKAN: Format string diatur di luar f-string utama
         rf_str  = f"{rf_r2:.4f}" if isinstance(rf_r2, float) else str(rf_r2)
         gbr_str = f"{gbr_r2:.4f}" if isinstance(gbr_r2, float) else str(gbr_r2)
         
@@ -1357,7 +1261,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     plt.close()
     log.info(f'  → {path}')
 
-
 def plot_ahp_visualization(ahp_results: dict) -> None:
     """Diagram bobot AHP + matriks CR untuk semua skenario."""
     log.info('[VIZ] Diagram AHP...')
@@ -1367,7 +1270,7 @@ def plot_ahp_visualization(ahp_results: dict) -> None:
                   fontsize=13, fontweight='bold')
 
     for j, (name, res) in enumerate(ahp_results.items()):
-        # ── Baris atas: pie chart bobot ────────────────────────────────────
+       
         ax_top = axes[0, j] if n_scen > 1 else axes[0]
         w = res['weights']
         vals   = [w.get('PV',0), w.get('Econ',0), w.get('Env',0)]
@@ -1380,7 +1283,6 @@ def plot_ahp_visualization(ahp_results: dict) -> None:
         ax_top.set_title(f'{name.replace("AHP_","")}\n{cr_lbl}',
                           fontsize=9, fontweight='bold', color=cr_clr)
 
-        # ── Baris bawah: heatmap matriks AHP ──────────────────────────────
         ax_bot = axes[1, j] if n_scen > 1 else axes[1]
         mat    = np.array(res['matrix'])
         sns.heatmap(np.log(mat), annot=mat, fmt='.2g', cmap='RdBu_r',
@@ -1397,7 +1299,6 @@ def plot_ahp_visualization(ahp_results: dict) -> None:
     plt.close()
     log.info(f'  → {path}')
 
-
 def plot_monte_carlo(buildings: gpd.GeoDataFrame, mc_meta: dict) -> None:
     """
     Visualisasi Monte Carlo:
@@ -1410,7 +1311,6 @@ def plot_monte_carlo(buildings: gpd.GeoDataFrame, mc_meta: dict) -> None:
     fig.suptitle(f'Analisis Sensitivitas Monte Carlo ({mc_meta["n_sim"]:,} Simulasi Dirichlet)',
                   fontsize=13, fontweight='bold')
 
-    # ── Kiri: Distribusi MC Mean Rank ─────────────────────────────────────────
     ax = axes[0]
     sns.histplot(buildings['mc_mean_rank'], bins=30, kde=True,
                   color='#4575b4', ax=ax, edgecolor='white', alpha=0.75)
@@ -1423,12 +1323,11 @@ def plot_monte_carlo(buildings: gpd.GeoDataFrame, mc_meta: dict) -> None:
             transform=ax.transAxes, ha='right', va='top', fontsize=8,
             bbox=dict(boxstyle='round', fc='white', alpha=0.8))
 
-    # ── Tengah: Mean Rank vs Std Rank ─────────────────────────────────────────
     ax = axes[1]
     sc = ax.scatter(buildings['mc_mean_rank'], buildings['mc_std_rank'],
                      c=buildings['mc_prob_top20'], cmap='RdYlGn',
                      s=20, alpha=0.65, edgecolors='none', vmin=0, vmax=1)
-    # Stable buildings
+   
     stab = buildings[buildings['mc_stable']]
     if len(stab):
         ax.scatter(stab['mc_mean_rank'], stab['mc_std_rank'],
@@ -1441,7 +1340,6 @@ def plot_monte_carlo(buildings: gpd.GeoDataFrame, mc_meta: dict) -> None:
     ax.set_title('Mean Rank vs Ketidakpastian Ranking', fontweight='bold')
     if len(stab): ax.legend(fontsize=8)
 
-    # ── Kanan: Top-20 MC probability ─────────────────────────────────────────
     ax   = axes[2]
     top20 = buildings.nsmallest(TOP_N, 'priority_rank').copy()
     top20['label'] = [f"#{int(r['priority_rank'])} B{int(r['bldg_id'])}"
@@ -1474,7 +1372,6 @@ def plot_monte_carlo(buildings: gpd.GeoDataFrame, mc_meta: dict) -> None:
     plt.close()
     log.info(f'  → {path}')
 
-
 def plot_tornado_chart(buildings: gpd.GeoDataFrame) -> None:
     """
     Tornado chart: dampak perubahan bobot tiap indeks terhadap rata-rata skor
@@ -1493,7 +1390,7 @@ def plot_tornado_chart(buildings: gpd.GeoDataFrame) -> None:
         for sign in [-1, +1]:
             w_test = deepcopy(base_w)
             w_test[ind] = np.clip(base_w[ind] + sign*delta, 0.05, 0.90)
-            # Normalisasi
+           
             total = sum(w_test.values())
             w_arr = np.array([w_test['PV']/total, w_test['Econ']/total,
                                w_test['Env']/total])
@@ -1553,7 +1450,6 @@ def plot_tornado_chart(buildings: gpd.GeoDataFrame) -> None:
     plt.close()
     log.info(f'  → {path}')
 
-
 def plot_quadrant_analysis(buildings: gpd.GeoDataFrame,
                              quad_res: dict) -> None:
     """Panel scatter 3 kuadran dengan anotasi jumlah bangunan per kuadran."""
@@ -1576,17 +1472,14 @@ def plot_quadrant_analysis(buildings: gpd.GeoDataFrame,
                          c=buildings['priority_score'], cmap=PRIORITY_CMAP,
                          s=20, alpha=0.70, edgecolors='none', vmin=0, vmax=1)
 
-        # Triple Winners
         tw = buildings[buildings['triple_winner']] if 'triple_winner' in buildings.columns else pd.DataFrame()
         if len(tw):
             ax.scatter(tw[c1], tw[c2], c='gold', s=80, edgecolors='black',
                         lw=0.8, zorder=5, marker='*', label='Triple Winner')
 
-        # Garis median
         ax.axvline(m1, color='gray', ls='--', lw=1.2, alpha=0.7)
         ax.axhline(m2, color='gray', ls='--', lw=1.2, alpha=0.7)
 
-        # Anotasi jumlah per kuadran
         q_labels = {
             'Q1 Star'          : (m1*1.25, m2*1.25, quad_res[key]['Q1_star']),
             f'Q2 {l1}-Leader'  : (m1*1.25, m2*0.5,  quad_res[key]['Q2_leader_x']),
@@ -1613,7 +1506,6 @@ def plot_quadrant_analysis(buildings: gpd.GeoDataFrame,
     plt.close()
     log.info(f'  → {path}')
 
-
 def export_all(buildings: gpd.GeoDataFrame,
                 ahp_results: dict,
                 ml_metrics: dict,
@@ -1622,7 +1514,6 @@ def export_all(buildings: gpd.GeoDataFrame,
     """Ekspor semua hasil ke GeoJSON, CSV, dan JSON summary."""
     log.info('[EXPORT] Mengekspor hasil Task 4...')
 
-    # ── Kolom untuk ekspor ────────────────────────────────────────────────────
     geo_cols  = ['bldg_id','geometry',
                   'solar_pv_index','econ_value_index','env_deg_index',
                   'wlc_Baseline','score_topsis','score_ahp','priority_ml',
@@ -1633,25 +1524,21 @@ def export_all(buildings: gpd.GeoDataFrame,
     out_gdf   = buildings[geo_cols].copy()
     out_gdf['priority_class'] = out_gdf['priority_class'].astype(str)
 
-    # GeoJSON (WGS84)
     geo_out = out_gdf.to_crs(GEO_CRS)
     gj_path = OUT + 'data/priority_score_final.geojson'
     geo_out.to_file(gj_path, driver='GeoJSON')
     log.info(f'  → {gj_path}')
 
-    # CSV Rankings
     csv_path = OUT + 'data/building_rankings.csv'
     geo_out.drop(columns='geometry').sort_values('priority_rank').to_csv(csv_path, index=False)
     log.info(f'  → {csv_path}')
 
-    # Top-N
     top_path = OUT + f'data/top{TOP_N}_priority.csv'
     (geo_out.drop(columns='geometry')
      .nsmallest(TOP_N, 'priority_rank')
      .to_csv(top_path, index=False))
     log.info(f'  → {top_path}')
 
-    # Monte Carlo
     mc_path = OUT + 'data/monte_carlo_results.csv'
     mc_cols = ['bldg_id','priority_rank','mc_mean_rank','mc_std_rank',
                 'mc_prob_top10','mc_prob_top20','mc_stable']
@@ -1659,7 +1546,6 @@ def export_all(buildings: gpd.GeoDataFrame,
     buildings[mc_cols].to_csv(mc_path, index=False)
     log.info(f'  → {mc_path}')
 
-    # ── JSON Ringkasan ─────────────────────────────────────────────────────────
     n_hi = int((buildings['priority_class']=='Tinggi').sum())
     n_md = int((buildings['priority_class']=='Sedang').sum())
     n_lo = int((buildings['priority_class']=='Rendah').sum())
@@ -1722,7 +1608,6 @@ def export_all(buildings: gpd.GeoDataFrame,
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
-    # ── Log ringkasan ──────────────────────────────────────────────────────────
     log.info('\n' + '═'*65)
     log.info('  RINGKASAN FINAL TASK 4 — PRIORITY SCORE')
     log.info('═'*65)
@@ -1750,7 +1635,6 @@ def _generate_recommendations(buildings: gpd.GeoDataFrame) -> list:
     recs = []
     n    = len(buildings)
 
-    # Rekomendasi 1: Top prioritas stabil (MC)
     if 'mc_stable' in buildings.columns:
         stable = buildings[buildings['mc_stable']]
         if len(stable):
@@ -1766,7 +1650,6 @@ def _generate_recommendations(buildings: gpd.GeoDataFrame) -> list:
                 'bldg_ids' : [int(i) for i in stable.nsmallest(5,'mc_mean_rank')['bldg_id'].tolist()],
             })
 
-    # Rekomendasi 2: High PV, Moderate Economics
     pv_hi = buildings[buildings['solar_pv_index'] >= 0.70]
     recs.append({
         'fase'     : 'Fase 2 — Prioritas Menengah',
@@ -1780,7 +1663,6 @@ def _generate_recommendations(buildings: gpd.GeoDataFrame) -> list:
         'bldg_ids' : [int(i) for i in pv_hi.nsmallest(5,'priority_rank')['bldg_id'].tolist()],
     })
 
-    # Rekomendasi 3: High Env degradation
     env_hi = buildings[buildings['env_deg_index'] >= 0.70]
     recs.append({
         'fase'     : 'Fase 2 — Prioritas Menengah',
@@ -1808,7 +1690,6 @@ def _generate_recommendations(buildings: gpd.GeoDataFrame) -> list:
 
     return recs
 
-
 def main(demo: bool = False) -> gpd.GeoDataFrame:
     t_start = datetime.now()
     log.info('=' * 70)
@@ -1818,40 +1699,29 @@ def main(demo: bool = False) -> gpd.GeoDataFrame:
     log.info(f'  Mode: {"DEMO (data sintetis)" if demo else "PRODUCTION (output Task 1–3)"}')
     log.info('=' * 70)
 
-    # ── [1] Load & Merge ──────────────────────────────────────────────────────
     buildings = load_and_merge(demo=demo)
 
-    # ── [2] AHP ───────────────────────────────────────────────────────────────
     ahp_results = run_all_ahp(buildings)
 
-    # ── [3] WLC + TOPSIS semua skenario ──────────────────────────────────────
     buildings = run_all_wlc(buildings)
 
-    # ── [4] AHP score (skenario Balanced) ─────────────────────────────────────
     ahp_bln   = ahp_results.get('AHP_Balanced', {})
     if ahp_bln:
         w = ahp_bln.get('weights', {'PV':0.54, 'Econ':0.30, 'Env':0.16})
         buildings = wlc_score(buildings, w, 'score_ahp')
 
-    # ── [5] ML Ensemble ───────────────────────────────────────────────────────
     buildings, ml_metrics = ml_ensemble(buildings, target_col='wlc_Baseline')
 
-    # ── [6] Final Priority Score ──────────────────────────────────────────────
     buildings = calculate_final_priority(buildings, ml_metrics)
 
-    # ── [7] Klasifikasi & Ranking ─────────────────────────────────────────────
     buildings = classify_and_rank(buildings)
 
-    # ── [8] Monte Carlo ───────────────────────────────────────────────────────
     buildings, mc_meta = monte_carlo_sensitivity(buildings)
 
-    # ── [9] Scenario Comparison ───────────────────────────────────────────────
     df_sens = scenario_comparison(buildings)
 
-    # ── [10] Quadrant Analysis ────────────────────────────────────────────────
     quad_res = quadrant_analysis(buildings)
 
-    # ── [11] Visualisasi ──────────────────────────────────────────────────────
     plot_priority_map(buildings)
     plot_interactive_map(buildings)
     plot_analysis_charts(buildings, ahp_results, ml_metrics, df_sens)
@@ -1860,7 +1730,6 @@ def main(demo: bool = False) -> gpd.GeoDataFrame:
     plot_tornado_chart(buildings)
     plot_quadrant_analysis(buildings, quad_res)
 
-    # ── [12] Export ───────────────────────────────────────────────────────────
     export_all(buildings, ahp_results, ml_metrics, df_sens, mc_meta)
 
     elapsed = (datetime.now() - t_start).seconds
@@ -1868,7 +1737,6 @@ def main(demo: bool = False) -> gpd.GeoDataFrame:
     log.info(f'  Semua output tersimpan di: {OUT}')
     log.info(f'  Jalankan task4_report_generator.py untuk laporan teknis HTML.')
     return buildings
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Task 4 — Solar PV Priority Integration')
