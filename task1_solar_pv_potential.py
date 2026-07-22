@@ -1,3 +1,4 @@
+#Task1
 import os
 import sys
 import json
@@ -52,64 +53,44 @@ matplotlib.rcParams.update({
     'grid.alpha'       : 0.3,
 })
 
-
 CFG = dict(
 
-    # ── Jalur file ────────────────────────────────────────────────────────────
     bldg_path  = 'data/Building_Footprint.geojson',
-    rad_path   = 'data/radiance_data.csv',       # CSV | GeoJSON | .tif
-    cf_path    = 'data/cloud_fraction.csv',       # dari task1_gee_fetch.py
+    rad_path   = 'data/radiance_data.csv',      
     out_dir    = 'output/task1/',
 
-    # ── CRS ───────────────────────────────────────────────────────────────────
-    # geo_crs  : untuk koordinat geografis (lon/lat)
-    # proj_crs : untuk perhitungan metrik (jarak, luas).
-    #            GANTI dengan UTM zone yang sesuai area studi.
-    #            Contoh: UTM48N=32648, UTM49S=32749, UTM47N=32647
     geo_crs    = 'EPSG:4326',
     proj_crs   = 'EPSG:32648',
 
-    # ── Parameter teknis PV ───────────────────────────────────────────────────
-    # Referensi: IEC 61215, PVGIS, NREL SAM
-    eta        = 0.20,     # Efisiensi panel (monocrystalline Si, STC 25°C)
-    PR         = 0.78,     # Performance Ratio (kabel + inverter + debu + mismatch)
-    rho_roof   = 0.65,     # Fraksi atap yang dapat digunakan (after HVAC, parapet, dll)
-    G_stc      = 1000,     # W/m² — Standard Test Conditions irradiance
-    NOCT       = 45,       # Normal Operating Cell Temperature (°C)
-    T_coeff    = -0.004,   # Koefisien temperatur daya (%/°C di atas 25°C)
-    T_amb      = 28,       # Temperatur ambient rata-rata tahunan (°C, tropis)
-    albedo     = 0.20,     # Reflektansi permukaan (tanah/jalan perkotaan)
+    eta        = 0.20,    
+    PR         = 0.78,    
+    rho_roof   = 0.65,    
+    G_stc      = 1000,    
+    NOCT       = 45,      
+    T_coeff    = -0.004,  
+    T_amb      = 28,      
+    albedo     = 0.20,    
 
-    # ── Geometri atap ─────────────────────────────────────────────────────────
-    tilt_deg   = 10,       # Kemiringan panel di atas atap datar (°) — optimal tropis
-    azimuth    = 360,      # Azimuth panel (180° = menghadap equator)
+    tilt_deg   = 10,      
+    azimuth    = 360,     
 
-    # ── Model shading ─────────────────────────────────────────────────────────
-    shadow_r_m = 50,       # Radius pencarian bangunan tetangga untuk shading (m)
-    solar_elv  = 60,       # Sudut elevasi matahari rata-rata (°, tropis)
-    cf_weight  = 0.30,     # Bobot Cloud Fraction dalam shading factor total
-    # Bobot building shadow = 1 - cf_weight
+    shadow_r_m = 50,      
+    solar_elv  = 60,      
+    cf_weight  = 0.30,    
+   
+    thr_low    = 0.33,    
+    thr_high   = 0.67,    
 
-    # ── Klasifikasi indeks ────────────────────────────────────────────────────
-    thr_low    = 0.33,     # Batas bawah kelas Tinggi
-    thr_high   = 0.67,     # Batas atas kelas Sedang
-
-    # ── ML (RandomForest height smoothing) ───────────────────────────────────
-    rf_n       = 150,      # Jumlah pohon
+    rf_n       = 150,     
     rf_seed    = 42,
-    cv_k       = 5,        # Lipatan K-Fold cross-validation
-    min_valid_h= 20,       # Minimal data valid untuk melatih model
+    cv_k       = 5,       
+    min_valid_h= 20,      
 )
 
-# ── Buat direktori output ────────────────────────────────────────────────────
 OUT = CFG['out_dir']
 for _sub in ['', 'maps/', 'figures/', 'data/']:
     Path(OUT + _sub).mkdir(parents=True, exist_ok=True)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §2  LOGGING
-# ═══════════════════════════════════════════════════════════════════════════════
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s │ %(levelname)-7s │ %(message)s',
@@ -121,18 +102,11 @@ logging.basicConfig(
 )
 log = logging.getLogger('Task1')
 
-
-# ── Warna & colormap ─────────────────────────────────────────────────────────
 PV_CMAP = LinearSegmentedColormap.from_list(
     'solar_pv', ['#d73027', '#fc8d59', '#fee08b', '#d9ef8b', '#1a9850'], N=256
 )
 CLASS_COLORS = {'Rendah': '#d73027', 'Sedang': '#fee08b', 'Tinggi': '#1a9850'}
 CLASS_ORDER  = ['Rendah', 'Sedang', 'Tinggi']
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §3  LOADING DATA
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def load_buildings(path: str) -> gpd.GeoDataFrame:
     """
@@ -146,14 +120,12 @@ def load_buildings(path: str) -> gpd.GeoDataFrame:
     log.info(f'       {len(gdf):,} polygon bangunan | CRS: {gdf.crs}')
     return gdf
 
-
 def _detect_format(path: str) -> str:
     ext = Path(path).suffix.lower()
     if ext in ('.csv', '.tsv', '.txt'): return 'csv'
     if ext in ('.geojson', '.json'):    return 'geojson'
     if ext in ('.tif', '.tiff'):        return 'raster'
     return 'csv'
-
 
 def _erbs_decomposition(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -175,7 +147,6 @@ def _erbs_decomposition(df: pd.DataFrame) -> pd.DataFrame:
     df['DNI'] = (df['GHI'] - df['DHI']) / cos_z
     return df
 
-
 def load_radiance(path: str) -> pd.DataFrame:
     """
     Muat data irradiance per titik (GHI/DNI/DHI).
@@ -196,7 +167,6 @@ def load_radiance(path: str) -> pd.DataFrame:
     else:
         raise ValueError(f'Format raster: gunakan fungsi load_radiance_raster()')
 
-    # Normalisasi nama kolom
     rename = {}
     for c in df.columns:
         cl = c.strip().lower()
@@ -218,7 +188,6 @@ def load_radiance(path: str) -> pd.DataFrame:
     log.info(f'       {len(df):,} titik irradiance | '
              f'GHI mean: {df["GHI"].mean():.1f} kWh/m²/yr')
     return df
-
 
 def load_radiance_raster(tif_path: str, band_map: dict = None) -> pd.DataFrame:
     """
@@ -253,7 +222,6 @@ def load_radiance_raster(tif_path: str, band_map: dict = None) -> pd.DataFrame:
     log.info(f'       {len(df):,} piksel raster | GHI mean: {df["GHI"].mean():.1f}')
     return df
 
-
 def load_cloud_fraction(path: str, buildings: gpd.GeoDataFrame = None) -> pd.DataFrame:
     """
     Muat Cloud Fraction dari CSV (output task1_gee_fetch.py).
@@ -280,11 +248,6 @@ def load_cloud_fraction(path: str, buildings: gpd.GeoDataFrame = None) -> pd.Dat
     log.info(f'       {len(df):,} titik CF | mean CF = {df["CF"].mean():.3f}')
     return df
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §4  PRE-PROCESSING
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def preprocess_buildings(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Standardisasi CRS, hitung atribut geometri, bersihkan data.
@@ -292,7 +255,6 @@ def preprocess_buildings(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     log.info('[PREP] Pre-processing bangunan...')
 
-    # 1. Standardisasi CRS
     if gdf.crs is None:
         gdf = gdf.set_crs(CFG['geo_crs'])
         log.info(f'       CRS tidak terdeteksi → set ke {CFG["geo_crs"]}')
@@ -301,13 +263,11 @@ def preprocess_buildings(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         gdf = gdf.to_crs(CFG['proj_crs'])
     log.info(f'       CRS diubah → {gdf.crs}')
 
-    # 2. Perbaiki geometri (self-intersection, dll)
     gdf['geometry'] = gdf['geometry'].buffer(0)
     gdf = gdf[gdf.geometry.is_valid & ~gdf.geometry.is_empty].copy()
 
-    # 3. Hitung luas atap (footprint area)
     if 'area_m2' not in gdf.columns:
-        # Cek kolom luas dalam berbagai nama
+       
         area_col = next(
             (c for c in gdf.columns
              if any(k in c.lower() for k in ('area', 'luas', 'luas_m'))),
@@ -320,7 +280,6 @@ def preprocess_buildings(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
             gdf['area_m2'] = gdf.geometry.area
             log.info('       area_m2 dihitung dari geometri')
 
-   # 4. Normalisasi kolom tinggi bangunan
     height_col = next(
         (c for c in gdf.columns
          if any(k in c.lower() for k in ('height', 'tinggi', 'elev', 'h_'))),
@@ -332,22 +291,16 @@ def preprocess_buildings(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         log.warning('       Kolom tinggi tidak ditemukan → default 6 m (2 lantai)')
         gdf['height'] = 6.0
 
-    # =====================================================================
-    # TAMBAHKAN BARIS INI UNTUK MEMAKSA KONVERSI TEKS MENJADI ANGKA (FLOAT)
-    # =====================================================================
     gdf['height'] = pd.to_numeric(gdf['height'], errors='coerce')
 
-    # 5. Isi nilai tinggi yang hilang (akan diperbaiki oleh ML di §6)
     n_miss = gdf['height'].isna().sum()
     if n_miss:
         med = gdf['height'].median()
         gdf['height'] = gdf['height'].fillna(med)
         log.warning(f'       {n_miss} nilai height kosong → diisi median ({med:.1f} m)')
 
-    # 6. Hapus slivers (bangunan terlalu kecil: < 3×3 m)
     gdf = gdf[gdf['area_m2'] > 9.0].copy()
 
-    # 7. Tambah ID unik dan fitur geometri tambahan
     gdf = gdf.reset_index(drop=True)
     gdf['bldg_id']    = gdf.index.astype(int)
     gdf['perimeter_m'] = gdf.geometry.length
@@ -358,11 +311,6 @@ def preprocess_buildings(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
              f'luas: {gdf["area_m2"].mean():.0f} m² (rata-rata) | '
              f'tinggi: {gdf["height"].mean():.1f} m (rata-rata)')
     return gdf
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §5  PENUGASAN IRRADIANCE KE BANGUNAN
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def assign_irradiance(buildings: gpd.GeoDataFrame,
                        rad_df: pd.DataFrame) -> gpd.GeoDataFrame:
@@ -387,11 +335,11 @@ def assign_irradiance(buildings: gpd.GeoDataFrame,
     for col in ['GHI', 'DNI', 'DHI']:
         if col not in rad_df.columns:
             continue
-        vals = rad_df[col].values[idx]          # shape (n_bldg, k)
+        vals = rad_df[col].values[idx]         
         if k == 1:
             buildings[col] = vals.ravel()
         else:
-            w   = 1.0 / (dist + 1e-10)**2       # IDW weight
+            w   = 1.0 / (dist + 1e-10)**2      
             w  /= w.sum(axis=1, keepdims=True)
             buildings[col] = (vals * w).sum(axis=1)
 
@@ -399,7 +347,6 @@ def assign_irradiance(buildings: gpd.GeoDataFrame,
         log.info(f'       GHI mean: {buildings["GHI"].mean():.1f} kWh/m²/yr '
                  f'| range [{buildings["GHI"].min():.0f}, {buildings["GHI"].max():.0f}]')
     return buildings
-
 
 def assign_cloud_fraction(buildings: gpd.GeoDataFrame,
                            cf_df: pd.DataFrame) -> gpd.GeoDataFrame:
@@ -422,11 +369,6 @@ def assign_cloud_fraction(buildings: gpd.GeoDataFrame,
     log.info(f'       CF mean: {buildings["CF"].mean():.3f} '
              f'| range [{buildings["CF"].min():.3f}, {buildings["CF"].max():.3f}]')
     return buildings
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §6  ML — SMOOTHING TINGGI BANGUNAN (RandomForest)   [Bonus §8.1]
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def smooth_heights_with_rf(buildings: gpd.GeoDataFrame) -> tuple:
     """
@@ -451,7 +393,6 @@ def smooth_heights_with_rf(buildings: gpd.GeoDataFrame) -> tuple:
     centroids   = np.column_stack([cx, cy])
     heights_arr = buildings['height'].values.copy().astype(float)
 
-    # Fitur kontekstual spasial
     tree = cKDTree(centroids)
     nbr_h_mean = np.zeros(len(bldg_p))
     nbr_count  = np.zeros(len(bldg_p))
@@ -474,9 +415,8 @@ def smooth_heights_with_rf(buildings: gpd.GeoDataFrame) -> tuple:
     ])
     y = heights_arr
 
-    # Pisahkan data valid (tinggi tidak default)
     default_h  = np.median(y)
-    valid_mask = (y > 0) & (y != 6.0) & (y < 300)   # filter outlier kasar
+    valid_mask = (y > 0) & (y != 6.0) & (y < 300)  
     n_valid    = int(valid_mask.sum())
 
     metrics = {'r2': None, 'mae': None, 'n_train': n_valid}
@@ -496,7 +436,6 @@ def smooth_heights_with_rf(buildings: gpd.GeoDataFrame) -> tuple:
         n_jobs=-1,
     )
 
-    # K-Fold Cross Validation
     kf   = KFold(n_splits=CFG['cv_k'], shuffle=True, random_state=CFG['rf_seed'])
     y_cv = cross_val_predict(rf, X_tr, y_tr, cv=kf)
     r2   = float(r2_score(y_tr, y_cv))
@@ -505,16 +444,13 @@ def smooth_heights_with_rf(buildings: gpd.GeoDataFrame) -> tuple:
     log.info(f'       RF Height Model ({CFG["cv_k"]}-Fold CV) → '
              f'R² = {r2:.4f} | MAE = {mae:.2f} m | n_train = {n_valid}')
 
-    # Latih ulang pada seluruh data valid
     rf.fit(X_tr, y_tr)
     y_pred   = rf.predict(X)
     y_smooth = y.copy()
 
-    # Isi celah (nilai default/nol/negatif)
     mask_fill = ~valid_mask
     y_smooth[mask_fill] = y_pred[mask_fill]
 
-    # Feature importance log
     feat_names = ['x','y','area','perimeter','compactness','nbr_h_mean','nbr_count']
     fi         = dict(zip(feat_names, rf.feature_importances_))
     top2       = sorted(fi, key=fi.get, reverse=True)[:2]
@@ -522,15 +458,10 @@ def smooth_heights_with_rf(buildings: gpd.GeoDataFrame) -> tuple:
              f'{top2[1]}={fi[top2[1]]:.3f}')
 
     buildings['height_smooth'] = y_smooth
-    buildings['height']        = y_smooth   # update kolom height utama
+    buildings['height']        = y_smooth  
     log.info(f'       Height diperbarui: mean={y_smooth.mean():.1f} m | '
              f'max={y_smooth.max():.1f} m')
     return buildings, metrics
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §7  AREA ATAP EFEKTIF + POA IRRADIANCE  (Task 1.1)
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def calculate_roof_area(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
@@ -544,7 +475,6 @@ def calculate_roof_area(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
              f'total = {buildings["A_eff"].sum()/1e4:.2f} ha | '
              f'mean per bangunan = {buildings["A_eff"].mean():.1f} m²')
     return buildings
-
 
 def calculate_poa_irradiance(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
@@ -564,7 +494,7 @@ def calculate_poa_irradiance(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
     beta_rad  = math.radians(CFG['tilt_deg'])
     cos_beta  = math.cos(beta_rad)
-    cos_inc   = math.cos(math.radians(CFG['tilt_deg']))  # approx for equator-facing
+    cos_inc   = math.cos(math.radians(CFG['tilt_deg'])) 
 
     GHI = buildings['GHI']
     DHI = buildings.get('DHI', GHI * 0.25)
@@ -581,11 +511,6 @@ def calculate_poa_irradiance(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     log.info(f'       POA mean: {buildings["POA_annual"].mean():.1f} kWh/m²/yr | '
              f'tilt gain: {(buildings["tilt_factor"].mean()-1)*100:+.1f}%')
     return buildings
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §8  MODEL SHADING (Task 1.1)
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def _building_shading(buildings: gpd.GeoDataFrame) -> np.ndarray:
     """
@@ -628,7 +553,7 @@ def _building_shading(buildings: gpd.GeoDataFrame) -> np.ndarray:
             shadow_len    = dh / max(tan_elv, 0.01)
             shadow_width  = math.sqrt(max(areas_arr[j], 1.0))
             shadow_area   = shadow_len * shadow_width
-            # Kurangi dengan fraksi overlap berdasarkan jarak
+           
             dist_ij       = math.hypot(cx[i]-cx[j], cy[i]-cy[j])
             overlap_f     = max(0, 1 - dist_ij / (R + 1e-6))
             shadow_total += shadow_area * overlap_f
@@ -636,7 +561,6 @@ def _building_shading(buildings: gpd.GeoDataFrame) -> np.ndarray:
         sf_bldg[i] = min(shadow_total / max(areas_arr[i], 1), 0.80)
 
     return sf_bldg
-
 
 def calculate_shading_factor(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
@@ -652,13 +576,10 @@ def calculate_shading_factor(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     log.info('[TASK1.1] Model shading...')
 
-    # ── Shading dari awan ────────────────────────────────────────────────────
     buildings['SF_cloud'] = (buildings['CF'] * 0.50).clip(0, 1)
 
-    # ── Shading dari bangunan tetangga ────────────────────────────────────────
     buildings['SF_bldg']  = _building_shading(buildings)
 
-    # ── Gabungan ─────────────────────────────────────────────────────────────
     w_cf   = CFG['cf_weight']
     w_bldg = 1.0 - w_cf
     buildings['SF_total'] = (
@@ -670,11 +591,6 @@ def calculate_shading_factor(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     log.info(f'       SF_bldg  mean: {buildings["SF_bldg"].mean():.3f}')
     log.info(f'       SF_total mean: {buildings["SF_total"].mean():.3f}')
     return buildings
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §9  MODEL ENERGI PV  (Task 1.2)
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def calculate_pv_energy(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
@@ -700,17 +616,13 @@ def calculate_pv_energy(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     Tc    = CFG['T_coeff']
     T_amb = CFG['T_amb']
 
-    # Kapasitas terpasang
     buildings['kWp'] = buildings['A_eff'] * η
 
-    # Temperatur sel rata-rata (menggunakan rata-rata irradiance tahunan)
-    ghi_mean_wm2        = buildings['GHI'] * 1000 / 8760   # kWh/yr → rata-rata W/m²
+    ghi_mean_wm2        = buildings['GHI'] * 1000 / 8760  
     buildings['T_cell'] = T_amb + (NOCT - 20) * ghi_mean_wm2 / 800
 
-    # Faktor koreksi temperatur
     buildings['T_corr'] = (1 + Tc * (buildings['T_cell'] - 25)).clip(0.70, 1.05)
 
-    # Produksi energi tahunan
     buildings['E_annual_kWh'] = (
         buildings['kWp'] *
         buildings['POA_annual'] *
@@ -719,7 +631,6 @@ def calculate_pv_energy(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         buildings['T_corr']
     ).clip(lower=0)
 
-    # Specific yield
     buildings['yield_spec'] = (
         buildings['E_annual_kWh'] /
         buildings['kWp'].replace(0, np.nan)
@@ -732,11 +643,6 @@ def calculate_pv_energy(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     log.info(f'       T_cell mean: {buildings["T_cell"].mean():.1f} °C | '
              f'T_corr mean: {buildings["T_corr"].mean():.3f}')
     return buildings
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §10  NORMALISASI & KLASIFIKASI  (Task 1.3)
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def normalize_index(buildings: gpd.GeoDataFrame,
                     col: str = 'E_annual_kWh') -> gpd.GeoDataFrame:
@@ -758,7 +664,6 @@ def normalize_index(buildings: gpd.GeoDataFrame,
              f'max={buildings["solar_pv_index"].max():.4f}')
     return buildings
 
-
 def classify_index(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Task 1.3 — Klasifikasi Solar PV Potential Index menjadi 3 kelas:
@@ -775,23 +680,16 @@ def classify_index(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     dist = buildings['pv_class'].value_counts()
     log.info(f'       Distribusi kelas: {dict(dist)}')
 
-    # Ranking (1 = tertinggi)
     buildings['pv_rank'] = (buildings['solar_pv_index']
                             .rank(ascending=False, method='min')
                             .astype(int))
     return buildings
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §11  VISUALISASI
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def _format_large(x, pos=None):
     """Formatter angka besar untuk sumbu matplotlib."""
     if abs(x) >= 1e6:  return f'{x/1e6:.1f}M'
     if abs(x) >= 1e3:  return f'{x/1e3:.1f}k'
     return str(int(x))
-
 
 def plot_static_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
     """
@@ -800,10 +698,9 @@ def plot_static_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
     """
     log.info('[VIZ] Membuat peta statis choropleth...')
 
-    bldg_wm = buildings.to_crs('EPSG:3857')   # Web Mercator untuk basemap
+    bldg_wm = buildings.to_crs('EPSG:3857')  
     fig, ax = plt.subplots(1, 1, figsize=(14, 10))
 
-    # Basemap
     if _opt['ctx']:
         try:
             _opt['ctx'].add_basemap(
@@ -813,14 +710,12 @@ def plot_static_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
         except Exception:
             pass
 
-    # Choropleth
     bldg_wm.plot(
         column='solar_pv_index', cmap=PV_CMAP,
         linewidth=0.2, edgecolor='#555555',
         legend=False, ax=ax, vmin=0, vmax=1
     )
 
-    # Colorbar
     sm   = plt.cm.ScalarMappable(cmap=PV_CMAP,
                                   norm=mcolors.Normalize(vmin=0, vmax=1))
     cbar = fig.colorbar(sm, ax=ax, fraction=0.025, pad=0.02, aspect=30)
@@ -830,7 +725,6 @@ def plot_static_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
         [f'0.0\n(Rendah)', f'{CFG["thr_low"]}', f'{CFG["thr_high"]}', '1.0\n(Tinggi)']
     )
 
-    # North arrow
     x0, x1, y0, y1 = *ax.get_xlim(), *ax.get_ylim()
     nx = x0 + (x1-x0)*0.96
     ny = y0 + (y1-y0)*0.92
@@ -841,15 +735,13 @@ def plot_static_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
     ax.text(nx, ny+(y1-y0)*0.008, 'N', ha='center', va='bottom',
             fontsize=12, fontweight='bold')
 
-    # Scalebar manual ~100 m
-    sb_len  = 100                          # meter
+    sb_len  = 100                         
     sb_x    = x0 + (x1-x0)*0.05
     sb_y    = y0 + (y1-y0)*0.04
     ax.plot([sb_x, sb_x+sb_len], [sb_y, sb_y], 'k-', linewidth=4)
     ax.text(sb_x + sb_len/2, sb_y+(y1-y0)*0.012, '100 m',
             ha='center', fontsize=8)
 
-    # Judul & metadata
     n_high = int((buildings['pv_class'] == 'Tinggi').sum())
     ax.set_title(
         'Solar PV Potential Index — Per Bangunan\n'
@@ -870,7 +762,6 @@ def plot_static_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
     plt.close()
     log.info(f'       Peta statis tersimpan → {output_path}')
 
-
 def plot_interactive_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
     """
     Peta interaktif Folium dengan tooltip per bangunan dan layer control.
@@ -890,13 +781,11 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
 
     m = folium.Map(location=centre, zoom_start=16, tiles='CartoDB positron')
 
-    # Fungsi warna berdasarkan index
     def _color(idx_val):
         if idx_val >= CFG['thr_high']: return CLASS_COLORS['Tinggi']
         if idx_val >= CFG['thr_low']:  return CLASS_COLORS['Sedang']
         return CLASS_COLORS['Rendah']
 
-    # GeoJSON layer utama
     geojson_layer = folium.GeoJson(
         bldg_geo[['geometry', 'bldg_id', 'solar_pv_index', 'pv_class',
                    'kWp', 'E_annual_kWh', 'area_m2', 'height',
@@ -922,7 +811,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
     )
     geojson_layer.add_to(m)
 
-    # Layer bangunan TOP 20 prioritas
     top20 = bldg_geo.nsmallest(20, 'pv_rank')
     for _, row in top20.iterrows():
         c = row.geometry.centroid
@@ -932,7 +820,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
             tooltip=f"Rank #{row['pv_rank']} | Index {row['solar_pv_index']:.3f}"
         ).add_to(m)
 
-    # Legend HTML
     legend_html = f"""
     <div style="position:fixed;bottom:25px;right:15px;z-index:9999;
                 background:white;padding:12px 16px;border-radius:8px;
@@ -954,7 +841,6 @@ def plot_interactive_map(buildings: gpd.GeoDataFrame, output_path: str) -> None:
     m.save(output_path)
     log.info(f'       Peta interaktif tersimpan → {output_path}')
 
-
 def plot_analysis_charts(buildings: gpd.GeoDataFrame,
                           ml_metrics: dict = None) -> None:
     """
@@ -970,7 +856,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     fig.suptitle('Task 1 — Analisis Solar PV Potential Index',
                   fontsize=15, fontweight='bold', y=0.99)
 
-    # ── Panel A: Distribusi indeks ────────────────────────────────────────────
     ax = axes[0, 0]
     sns.histplot(buildings['solar_pv_index'], bins=35, kde=True,
                   color='#1a9850', ax=ax, edgecolor='white',
@@ -989,7 +874,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
                 transform=ax.transAxes, ha='right', va='top',
                 fontsize=8, color=clr, fontweight='bold')
 
-    # ── Panel B: Box plot energi per kelas ────────────────────────────────────
     ax = axes[0, 1]
     bldg_cls = buildings.copy()
     bldg_cls['pv_class'] = bldg_cls['pv_class'].astype(str)
@@ -1003,13 +887,12 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     ax.set_ylabel('Produksi Energi (kWh/yr)', fontsize=10)
     ax.set_title('B. Distribusi Energi per Kelas', fontweight='bold')
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(_format_large))
-    # Tambah median label
+   
     for i, cls in enumerate(CLASS_ORDER):
         med = buildings[buildings['pv_class'] == cls]['E_annual_kWh'].median()
         ax.text(i, med, f'{_format_large(med)}', ha='center', va='bottom',
                 fontsize=8, fontweight='bold', color='black')
 
-    # ── Panel C: Scatter luas atap vs energi ─────────────────────────────────
     ax = axes[1, 0]
     sc = ax.scatter(
         buildings['A_eff'], buildings['E_annual_kWh'],
@@ -1029,7 +912,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
                 transform=ax.transAxes, fontsize=9, va='top',
                 bbox=dict(boxstyle='round', fc='white', alpha=0.7))
 
-    # ── Panel D: Komponen shading ─────────────────────────────────────────────
     ax = axes[1, 1]
     shade_data = {
         'Cloud Shading (SF_cloud)': ('SF_cloud', '#74c476'),
@@ -1044,12 +926,11 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     ax.set_ylabel('Densitas', fontsize=10)
     ax.set_title('D. Distribusi Komponen Shading Factor', fontweight='bold')
     ax.legend(fontsize=8)
-    # Rata-rata vertikal
+   
     for col, clr in [('SF_cloud','#74c476'),('SF_total','#9e9ac8')]:
         if col in buildings.columns:
             ax.axvline(buildings[col].mean(), color=clr, ls=':', lw=1.5, alpha=0.8)
 
-    # Anotasi metrik ML
     if ml_metrics and ml_metrics.get('r2') is not None:
         fig.text(
             0.01, 0.005,
@@ -1064,7 +945,6 @@ def plot_analysis_charts(buildings: gpd.GeoDataFrame,
     plt.savefig(path)
     plt.close()
     log.info(f'       Grafik analisis tersimpan → {path}')
-
 
 def plot_top_buildings(buildings: gpd.GeoDataFrame, top_n: int = 20) -> None:
     """Bar chart Top-N bangunan prioritas dengan detail atribut."""
@@ -1101,11 +981,6 @@ def plot_top_buildings(buildings: gpd.GeoDataFrame, top_n: int = 20) -> None:
     plt.close()
     log.info(f'       Top-{top_n} chart tersimpan → {path}')
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §12  EKSPOR HASIL
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def export_results(buildings: gpd.GeoDataFrame) -> None:
     """
     Ekspor hasil ke GeoJSON, CSV, dan ringkasan JSON.
@@ -1126,25 +1001,21 @@ def export_results(buildings: gpd.GeoDataFrame) -> None:
     out_gdf  = buildings[out_cols].copy()
     out_gdf['pv_class'] = out_gdf['pv_class'].astype(str)
 
-    # ── GeoJSON (EPSG:4326) ──────────────────────────────────────────────────
     geo_out = out_gdf.to_crs('EPSG:4326')
     gjson_path = OUT + 'data/solar_pv_index.geojson'
     geo_out.to_file(gjson_path, driver='GeoJSON')
     log.info(f'       → {gjson_path}')
 
-    # ── CSV ringkasan (tanpa geometry) ───────────────────────────────────────
     csv_path = OUT + 'data/solar_pv_summary.csv'
     geo_out.drop(columns='geometry').to_csv(csv_path, index=False)
     log.info(f'       → {csv_path}')
 
-    # ── Top-20 ranking ───────────────────────────────────────────────────────
     top_path = OUT + 'data/top20_priority.csv'
     (geo_out.drop(columns='geometry')
      .nsmallest(20, 'pv_rank')
      .to_csv(top_path, index=False))
     log.info(f'       → {top_path}')
 
-    # ── Ringkasan JSON ────────────────────────────────────────────────────────
     summary = {
         'n_buildings'         : int(len(buildings)),
         'total_A_eff_ha'      : round(float(buildings['A_eff'].sum())/1e4, 3),
@@ -1179,7 +1050,6 @@ def export_results(buildings: gpd.GeoDataFrame) -> None:
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
-    # ── Log ringkasan ke konsol ────────────────────────────────────────────
     log.info('\n' + '═'*60)
     log.info('  RINGKASAN HASIL TASK 1')
     log.info('═'*60)
@@ -1196,11 +1066,6 @@ def export_results(buildings: gpd.GeoDataFrame) -> None:
     log.info('═'*60)
     log.info(f'  JSON summary → {json_path}')
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# §13  PIPELINE UTAMA
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def main() -> gpd.GeoDataFrame:
     """
     Pipeline end-to-end Task 1.
@@ -1214,38 +1079,28 @@ def main() -> gpd.GeoDataFrame:
     log.info(f'  Dimulai: {t_start:%Y-%m-%d %H:%M:%S}')
     log.info('=' * 68)
 
-    # ── [1] Load data ─────────────────────────────────────────────────────────
     buildings = load_buildings(CFG['bldg_path'])
     rad_df    = load_radiance(CFG['rad_path'])
     cf_df     = load_cloud_fraction(CFG['cf_path'], buildings)
 
-    # ── [2] Preprocess ────────────────────────────────────────────────────────
     buildings = preprocess_buildings(buildings)
 
-    # ── [3] ML: RF height smoothing ───────────────────────────────────────────
     buildings, ml_metrics = smooth_heights_with_rf(buildings)
 
-    # ── [4] Penugasan irradiance & cloud fraction ─────────────────────────────
     buildings = assign_irradiance(buildings, rad_df)
     buildings = assign_cloud_fraction(buildings, cf_df)
 
-    # ── [5] Area atap efektif ─────────────────────────────────────────────────
     buildings = calculate_roof_area(buildings)
 
-    # ── [6] Task 1.1 — POA irradiance ────────────────────────────────────────
     buildings = calculate_poa_irradiance(buildings)
 
-    # ── [7] Task 1.1 — Shading model ─────────────────────────────────────────
     buildings = calculate_shading_factor(buildings)
 
-    # ── [8] Task 1.2 — PV energy ─────────────────────────────────────────────
     buildings = calculate_pv_energy(buildings)
 
-    # ── [9] Task 1.3 — Normalisasi & klasifikasi ─────────────────────────────
     buildings = normalize_index(buildings, col='E_annual_kWh')
     buildings = classify_index(buildings)
 
-    # ── [10] Visualisasi ──────────────────────────────────────────────────────
     plot_static_map(
         buildings,
         output_path=OUT + 'maps/task1_pv_index_map.png'
@@ -1257,7 +1112,6 @@ def main() -> gpd.GeoDataFrame:
     plot_analysis_charts(buildings, ml_metrics)
     plot_top_buildings(buildings, top_n=20)
 
-    # ── [11] Ekspor ───────────────────────────────────────────────────────────
     export_results(buildings)
 
     elapsed = (datetime.now() - t_start).seconds
@@ -1265,7 +1119,5 @@ def main() -> gpd.GeoDataFrame:
     log.info(f'  Output tersimpan di: {OUT}')
     return buildings
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
 if __name__ == '__main__':
     result = main()
